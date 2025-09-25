@@ -2,25 +2,71 @@
  * @OnlyCurrentDoc
  * SCRIPT DE AUTOMAÇÃO DE RELATÓRIOS DINÂMICOS - VERSÃO COM PAINEL UNIFICADO
  *
- * REVISÃO 23.0 (REFINAMENTO FINAL DE UI/UX):
- * - MELHORIA DE LAYOUT: O "Painel de Seleção" e o "Painel de Pré-visualização" agora são
- * desenhados dinamicamente, um ao lado do outro, eliminando espaços vazios e criando um
- * "Painel Unificado" coeso e orgânico.
- * - HARMONIA VISUAL: Aplicado Row Banding em toda a área dos painéis para unificar
- * visualmente a interface e melhorar a legibilidade.
- * - CONFIABILIDADE: Otimizada a lógica de redesenho dos painéis para garantir que o fluxo
- * permaneça 100% automático, rápido e estável.
- * - CÓDIGO COMPLETO: Esta versão contém todas as funcionalidades revisadas e prontas para uso.
+ * REVISÃO 30.0 (REFINAMENTO DE PERFORMANCE FINAL):
+ * - ATUALIZAÇÕES INDIVIDUALIZADAS: O script agora identifica qual nível de agrupamento foi alterado e atualiza
+ * APENAS o painel correspondente. Isto elimina completamente o efeito de "piscar" e a recriação desnecessária
+ * dos outros painéis, resultando numa experiência de utilização instantânea e fluida.
+ * - LÓGICA OTIMIZADA: A função onEdit foi reestruturada para ser mais granular, chamando funções de atualização
+ * específicas para cada painel, maximizando a performance.
  */
+
+// =================================================================
+// CONFIGURAÇÕES GLOBAIS E CONSTANTES
+// =================================================================
+const CONSTANTS = {
+  SHEETS: {
+    CONFIG: 'Config',
+  },
+  CONFIG_KEYS: {
+    SOURCE_SHEET: 'Aba Origem',
+    GROUP_L1: 'Agrupar por Nível 1',
+    GROUP_L2: 'Agrupar por Nível 2',
+    GROUP_L3: 'Agrupar por Nível 3',
+    COL_1: 'Coluna 1',
+    COL_2: 'Coluna 2',
+    COL_3: 'Coluna 3',
+    COL_4: 'Coluna 4',
+    COL_5: 'Coluna 5',
+    PROJECT: 'Project',
+    BOM: 'BOM',
+    KOJO_PREFIX: 'KOJO Prefixo',
+    ENGINEER: 'Engenheiro',
+    VERSION: 'Versão',
+    DRIVE_FOLDER_ID: 'Pasta Drive ID',
+    DRIVE_FOLDER_NAME: 'Pasta Nome',
+    PDF_PREFIX: 'PDF Prefixo',
+  },
+  UI: {
+    MENU_NAME: '🔧 Relatórios Dinâmicos',
+    SIDEBAR_TITLE: 'Painel de Controle',
+    SIDEBAR_FILE: 'ConfigSidebar.html',
+  },
+  COLORS: {
+    HEADER_BG: '#2c3e50',
+    SECTION_BG: '#3498db',
+    INPUT_BG: '#ecf0f1',
+    FONT_LIGHT: '#ffffff',
+    FONT_DARK: '#2c3e50',
+    FONT_SUBTLE: '#7f8c8d',
+    BORDER: '#bdc3c7',
+    FONT_FAMILY: 'Inter',
+    PANEL_EMPTY_BG: '#95a5a6',
+    PANEL_ERROR_BG: '#c0392b'
+  },
+  CACHE_EXPIRATION_SECONDS: 600, // Cache expira em 10 minutos
+};
+
 
 function onOpen() {
   try {
     SpreadsheetApp.getUi()
-      .createMenu('🔧 Relatórios Dinâmicos')
+      .createMenu(CONSTANTS.UI.MENU_NAME)
       .addItem('⚙️ Painel de Controle', 'openConfigSidebar')
       .addSeparator()
       .addItem('📊 Processar Dados', 'runProcessingWithFeedback')
       .addItem('📄 Exportar Todos PDFs', 'exportAllPDFsWithFeedback')
+      .addSeparator()
+      .addItem('🗑️ Limpar Relatórios Antigos', 'clearOldReports')
       .addSeparator()
       .addItem('🧪 Diagnóstico', 'testSystem')
       .addItem('🔧 Recriar Config', 'forceCreateConfig')
@@ -33,21 +79,43 @@ function onOpen() {
 
 function openConfigSidebar() {
   try {
-    const html = HtmlService.createHtmlOutputFromFile('ConfigSidebar.html')
-                           .setTitle('Painel de Controle')
+    const html = HtmlService.createHtmlOutputFromFile(CONSTANTS.UI.SIDEBAR_FILE)
+                           .setTitle(CONSTANTS.UI.SIDEBAR_TITLE)
                            .setWidth(320);
     SpreadsheetApp.getUi().showSidebar(html);
   } catch (error)    {
     console.error('Erro ao abrir a sidebar:', error);
-    SpreadsheetApp.getUi().alert("Erro ao carregar o Painel de Controle. Verifique se o arquivo 'ConfigSidebar.html' existe.");
+    SpreadsheetApp.getUi().alert(`Erro ao carregar o Painel de Controle. Verifique se o arquivo '${CONSTANTS.UI.SIDEBAR_FILE}' existe.`);
   }
 }
 
 // =================================================================
-// FUNÇÕES UTILITÁRIAS E CACHE
+// FUNÇÕES UTILITÁRIAS, CACHE E LEITURA DE CONFIG
 // =================================================================
 
-const CACHE_EXPIRATION = 600; // Cache expira em 10 minutos
+function getAllConfigValues() {
+    const cache = CacheService.getScriptCache();
+    const cacheKey = 'all_config_values';
+    const cached = cache.get(cacheKey);
+    if (cached) {
+        return JSON.parse(cached);
+    }
+
+    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONSTANTS.SHEETS.CONFIG);
+    if (!configSheet) return {};
+    
+    const values = configSheet.getRange("A1:B" + configSheet.getLastRow()).getValues();
+    const config = {};
+    values.forEach(row => {
+        const key = row[0].toString().trim();
+        if (key) {
+            config[key] = row[1];
+        }
+    });
+    
+    cache.put(cacheKey, JSON.stringify(config), CONSTANTS.CACHE_EXPIRATION_SECONDS / 2);
+    return config;
+}
 
 function getUniqueColumnValues(sheet, columnIndex) {
     const cache = CacheService.getScriptCache();
@@ -57,13 +125,14 @@ function getUniqueColumnValues(sheet, columnIndex) {
         return JSON.parse(cached);
     }
     
-    const values = sheet.getRange(2, columnIndex, sheet.getLastRow()).getValues().flat();
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return [];
+    const values = sheet.getRange(2, columnIndex, lastRow - 1).getValues().flat();
     const uniqueValues = [...new Set(values.filter(v => v))].sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric: true}));
     
-    cache.put(cacheKey, JSON.stringify(uniqueValues), CACHE_EXPIRATION);
+    cache.put(cacheKey, JSON.stringify(uniqueValues), CONSTANTS.CACHE_EXPIRATION_SECONDS);
     return uniqueValues;
 }
-
 
 function getColumnIndex(colConfig) {
   if (!colConfig || typeof colConfig !== 'string') return -1;
@@ -85,7 +154,7 @@ function formatVersion(inputValue) {
     return (isNaN(num) || num < 1) ? str : (num < 10 ? `0${num}` : `${num}`);
 }
 
-function extractFolderIdFromUrl(url) {
+function extractFolderIdFromurl(url) {
   if (typeof url !== 'string' || url.trim() === '') return '';
   const match = url.match(/folders\/([a-zA-Z0-9_-]+)/);
   return match ? match[1] : url;
@@ -96,96 +165,93 @@ function extractFolderIdFromUrl(url) {
 // =================================================================
 
 function ensureConfigExists() {
-  if (!SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config')) {
+  if (!SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONSTANTS.SHEETS.CONFIG)) {
     forceCreateConfig();
   }
 }
 
 function forceCreateConfig() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetName = 'Config';
+  const sheetName = CONSTANTS.SHEETS.CONFIG;
   let configSheet = ss.getSheetByName(sheetName);
   if (configSheet) ss.deleteSheet(configSheet);
   configSheet = ss.insertSheet(sheetName, 0);
   configSheet.clear();
 
-  const styles = {
-    bgHeader: '#2c3e50', bgSection: '#3498db', bgInput: '#ecf0f1',
-    fontLight: '#ffffff', fontDark: '#2c3e50', fontSubtle: '#7f8c8d',
-    border: '#bdc3c7', fontFamily: 'Inter'
-  };
+  const styles = CONSTANTS.COLORS;
 
   const configData = [
     ['CONFIGURAÇÃO', 'VALOR', 'DESCRIÇÃO'],
     ['', '', ''],
     [' 📊 AGRUPAMENTO', '', 'Defina as colunas para agrupar e os painéis serão atualizados automaticamente.'],
-    ['Aba Origem', '', 'Aba que contém todos os dados brutos.'],
-    ['Agrupar por Nível 1', '', 'Coluna principal de agrupamento (obrigatório).'],
-    ['Agrupar por Nível 2', '', 'Subnível de agrupamento (opcional).'],
-    ['Agrupar por Nível 3', '', 'Terceiro nível de agrupamento (opcional).'],
+    [CONSTANTS.CONFIG_KEYS.SOURCE_SHEET, '', 'Aba que contém todos os dados brutos.'],
+    [CONSTANTS.CONFIG_KEYS.GROUP_L1, '', 'Coluna principal de agrupamento (obrigatório).'],
+    [CONSTANTS.CONFIG_KEYS.GROUP_L2, '', 'Subnível de agrupamento (opcional).'],
+    [CONSTANTS.CONFIG_KEYS.GROUP_L3, '', 'Terceiro nível de agrupamento (opcional).'],
     ['', '', ''],
     [' 📋 DADOS BOMS', '', 'Mapeamento das colunas para a criação das listas de materiais (BOMs).'],
-    ['Coluna 1', '', 'Coluna para o ID principal ou identificador do item.'],
-    ['Coluna 2', 'I - DESC', 'Coluna para a descrição do item.'],
-    ['Coluna 3', 'L - UPC', 'Coluna para o código de barras ou UPC.'],
-    ['Coluna 4', 'K - UOM', 'Coluna para a unidade de medida (Unit of Measure).'],
-    ['Coluna 5', 'N - PROJECT', 'Coluna com a quantidade a ser somada.'],
+    [CONSTANTS.CONFIG_KEYS.COL_1, '', 'Coluna para o ID principal ou identificador do item.'],
+    [CONSTANTS.CONFIG_KEYS.COL_2, 'I - DESC', 'Coluna para a descrição do item.'],
+    [CONSTANTS.CONFIG_KEYS.COL_3, 'L - UPC', 'Coluna para o código de barras ou UPC.'],
+    [CONSTANTS.CONFIG_KEYS.COL_4, 'K - UOM', 'Coluna para a unidade de medida (Unit of Measure).'],
+    [CONSTANTS.CONFIG_KEYS.COL_5, 'N - PROJECT', 'Coluna com a quantidade a ser somada.'],
     ['', '', ''],
     [' 🏷️ CABEÇALHO', '', 'Informações que aparecerão no cabeçalho de cada relatório gerado.'],
-    ['Project', 'HG1 BE', 'Nome principal do projeto.'],
-    ['BOM', 'RISERS JS', 'Nome da lista de materiais (Bill of Materials).'],
-    ['KOJO Prefixo', 'HG1.PLB.RGH.JS.BE.UNT.RISER', 'Prefixo fixo para o código KOJO.'],
-    ['Engenheiro', 'WANDERSON', 'Nome do engenheiro responsável.'],
-    ['Versão', '', 'Versão do relatório (ex: 01, 02, 03...).'],
+    [CONSTANTS.CONFIG_KEYS.PROJECT, 'HG1 BE', 'Nome principal do projeto.'],
+    [CONSTANTS.CONFIG_KEYS.BOM, 'RISERS JS', 'Nome da lista de materiais (Bill of Materials).'],
+    [CONSTANTS.CONFIG_KEYS.KOJO_PREFIX, 'HG1.PLB.RGH.JS.BE.UNT.RISER', 'Prefixo fixo para o código KOJO.'],
+    [CONSTANTS.CONFIG_KEYS.ENGINEER, 'WANDERSON', 'Nome do engenheiro responsável.'],
+    [CONSTANTS.CONFIG_KEYS.VERSION, '', 'Versão do relatório (ex: 01, 02, 03...).'],
     ['', '', ''],
     [' 💾 SALVAMENTO', '', 'Configurações para exportação e salvamento dos arquivos.'],
-    ['Pasta Drive ID', '', 'Cole o LINK COMPLETO da pasta ou apenas o ID.'],
-    ['Pasta Nome', '', 'Nome da pasta a ser criada caso o link/ID não seja fornecido.'],
-    ['PDF Prefixo', 'HG1.PLB.RGH.JS.BE.UNT.RISER', 'Prefixo para os nomes dos arquivos PDF exportados.']
+    [CONSTANTS.CONFIG_KEYS.DRIVE_FOLDER_ID, '', 'Cole o LINK COMPLETO da pasta ou apenas o ID.'],
+    [CONSTANTS.CONFIG_KEYS.DRIVE_FOLDER_NAME, '', 'Nome da pasta a ser criada caso o link/ID não seja fornecido.'],
+    [CONSTANTS.CONFIG_KEYS.PDF_PREFIX, 'HG1.PLB.RGH.JS.BE.UNT.RISER', 'Prefixo para os nomes dos arquivos PDF exportados.']
   ];
   
   configSheet.getRange(1, 1, configData.length, 3).setValues(configData);
-  configSheet.getRange("A1:C" + configData.length).setFontFamily(styles.fontFamily).setVerticalAlignment('middle').setFontColor(styles.fontDark);
+  configSheet.getRange("A1:C" + configData.length).setFontFamily(styles.FONT_FAMILY).setVerticalAlignment('middle').setFontColor(styles.FONT_DARK);
   configSheet.setColumnWidth(1, 220).setColumnWidth(2, 300).setColumnWidth(3, 350);
-  configSheet.getRange('A1:C1').merge().setValue('⚙️ PAINEL DE CONFIGURAÇÃO | RELATÓRIOS DINÂMICOS').setBackground(styles.bgHeader).setFontColor(styles.fontLight).setFontSize(14).setFontWeight('bold').setHorizontalAlignment('center');
-  configSheet.setRowHeight(1, 40);
+  configSheet.getRange('A1:C1').merge().setValue('⚙️ PAINEL DE CONFIGURAÇÃO | RELATÓRIOS DINÂMICOS').setBackground(styles.HEADER_BG).setFontColor(styles.FONT_LIGHT).setFontSize(14).setFontWeight('bold').setHorizontalAlignment('center');
+  
   const sections = { 3: { endRow: 7 }, 9: { endRow: 14 }, 16: { endRow: 21 }, 23: { endRow: 26 } };
   for (const startRow in sections) {
     const s = sections[startRow], start = parseInt(startRow);
-    configSheet.getRange(start, 1, 1, 3).merge().setBackground(styles.bgSection).setFontColor(styles.fontLight).setFontSize(11).setFontWeight('bold').setHorizontalAlignment('left');
+    configSheet.getRange(start, 1, 1, 3).merge().setBackground(styles.SECTION_BG).setFontColor(styles.FONT_LIGHT).setFontSize(11).setFontWeight('bold').setHorizontalAlignment('left');
     configSheet.setRowHeight(start, 30);
     for (let r = start + 1; r <= s.endRow; r++) {
-      configSheet.getRange(r, 2).setBackground(styles.bgInput).setHorizontalAlignment('center');
+      configSheet.getRange(r, 2).setBackground(styles.INPUT_BG).setHorizontalAlignment('center');
       configSheet.getRange(r, 1).setFontWeight('500');
-      configSheet.getRange(r, 3).setFontStyle('italic').setFontColor(styles.fontSubtle);
+      configSheet.getRange(r, 3).setFontStyle('italic').setFontColor(styles.FONT_SUBTLE);
       configSheet.setRowHeight(r, 28);
     }
-    configSheet.getRange(start, 1, s.endRow - start + 1, 3).setBorder(true, true, true, true, null, null, styles.border, SpreadsheetApp.BorderStyle.SOLID);
+    configSheet.getRange(start, 1, s.endRow - start + 1, 3).setBorder(true, true, true, true, null, null, styles.BORDER, SpreadsheetApp.BorderStyle.SOLID);
   }
   configSheet.getRange(21, 2).setNumberFormat('@STRING@');
   configSheet.setFrozenRows(1);
-  configSheet.getRange('E1').setValue('PAINEL UNIFICADO DE AGRUPAMENTO E PRÉ-VISUALIZAÇÃO').setFontWeight('bold').setFontFamily(styles.fontFamily);
-  configSheet.getRange('E2').setValue('O painel é atualizado automaticamente. Edite o Sufixo KOJO na área de pré-visualização.').setFontStyle('italic').setFontFamily(styles.fontFamily);
+  
+  configSheet.getRange('E1:M1').merge().setValue('PAINEL UNIFICADO DE AGRUPAMENTO E PRÉ-VISUALIZAÇÃO')
+      .setBackground(styles.HEADER_BG).setFontColor(styles.FONT_LIGHT).setFontSize(14)
+      .setFontWeight('bold').setHorizontalAlignment('center').setFontFamily(styles.FONT_FAMILY);
+  configSheet.setRowHeight(1, 40);
+
   SpreadsheetApp.flush();
   Utilities.sleep(100);
   updateConfigDropdownsAuto();
 }
 
-function getConfigValue(key) {
-  return SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config').getRange("A1:B" + SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config').getLastRow()).getValues().find(row => row[0].toString().trim() === key)?.[1] || null;
-}
-
 function updateConfigDropdownsAuto() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const configSheet = ss.getSheetByName('Config');
+  const configSheet = ss.getSheetByName(CONSTANTS.SHEETS.CONFIG);
   if (!configSheet) return;
+  const config = getAllConfigValues();
 
-  const sourceSheets = ss.getSheets().map(s => s.getName()).filter(n => n !== 'Config');
+  const sourceSheets = ss.getSheets().map(s => s.getName()).filter(n => n !== CONSTANTS.SHEETS.CONFIG);
   if (sourceSheets.length > 0) {
     configSheet.getRange('B4').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(sourceSheets, true).setAllowInvalid(false).build());
   }
 
-  const sourceSheet = ss.getSheetByName(getConfigValue('Aba Origem'));
+  const sourceSheet = ss.getSheetByName(config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
   if (!sourceSheet || sourceSheet.getLastColumn() === 0) return;
   
   const headers = sourceSheet.getRange(1, 1, 1, sourceSheet.getLastColumn()).getValues()[0];
@@ -194,155 +260,211 @@ function updateConfigDropdownsAuto() {
   [5, 6, 7, 10, 11, 12, 13, 14].forEach(row => configSheet.getRange(row, 2).setDataValidation(columnRule));
 }
 
+/**
+ * ATUALIZADO: Lógica granular para redesenhar apenas os painéis necessários.
+ */
 function onEdit(e) {
     if (!e || !e.source) return;
     const sheet = e.source.getActiveSheet();
     const range = e.range;
-    if (sheet.getName() !== 'Config') return;
+    if (sheet.getName() !== CONSTANTS.SHEETS.CONFIG) return;
+    
+    CacheService.getScriptCache().remove('all_config_values');
     const col = range.getColumn();
     const row = range.getRow();
 
-    // Se a edição for na configuração de agrupamento (coluna B, linhas 4-7)
+    // Se a configuração de agrupamento principal for alterada
     if (col === 2 && row >= 4 && row <= 7) { 
-        SpreadsheetApp.getActiveSpreadsheet().toast('Detectada alteração, atualizando...', 'Aguarde', 3);
         Utilities.sleep(200);
-        updateConfigDropdownsAuto();
-        const nextCol = updateGroupingPanel();
-        updatePreviewPanel(nextCol);
+        const config = getAllConfigValues();
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sourceSheet = ss.getSheetByName(config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
+        
+        switch (row) {
+            case 4: // Aba Origem mudou: redesenha tudo
+                SpreadsheetApp.getActiveSpreadsheet().toast('Aba de origem alterada, recriando painel...', 'Aguarde', 3);
+                updateConfigDropdownsAuto();
+                updateGroupingPanel();
+                break;
+            case 5: // Nível 1 mudou: redesenha apenas o painel 1
+                SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando Nível 1...', 'Aguarde', 2);
+                updateSingleLevelPanel(1, config, sourceSheet);
+                break;
+            case 6: // Nível 2 mudou: redesenha apenas o painel 2
+                SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando Nível 2...', 'Aguarde', 2);
+                updateSingleLevelPanel(2, config, sourceSheet);
+                break;
+            case 7: // Nível 3 mudou: redesenha apenas o painel 3
+                SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando Nível 3...', 'Aguarde', 2);
+                updateSingleLevelPanel(3, config, sourceSheet);
+                break;
+        }
+        updatePreviewPanel(11); // A pré-visualização sempre atualiza
     }
     
-    // Se a edição for um checkbox no Painel de Seleção
-    if (col >= 6 && (col - 6) % 3 === 0 && row >= 5) {
-        const nextCol = updateGroupingPanel(); // Redesenha para manter a consistência
-        updatePreviewPanel(nextCol);
+    // Se for um clique na checkbox, atualiza APENAS a pré-visualização
+    if (col >= 6 && row >= 4 && range.getWidth() === 1 && range.getDataValidation() && range.getDataValidation().getCriteriaType() === SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
+        SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando combinações...', 'Aguarde', 2);
+        updatePreviewPanel(11);
     }
+}
+
+/**
+ * ATUALIZADO: Nova função para atualizar um único painel de nível.
+ */
+function updateSingleLevelPanel(level, config, sourceSheet) {
+    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONSTANTS.SHEETS.CONFIG);
+    const startCol = 5 + (level - 1) * 2;
+    const levelId = `NÍVEL ${level}`;
+    const groupConfigKey = `Agrupar por Nível ${level}`;
+    const groupConfig = config[groupConfigKey];
+
+    // Limpa apenas a área do painel específico
+    configSheet.getRange(3, startCol, configSheet.getMaxRows() - 2, 2).clear();
+
+    configSheet.setColumnWidth(startCol, 150).setColumnWidth(startCol + 1, 50);
+    const headerRange = configSheet.getRange(3, startCol, 1, 2).merge();
+
+    if (sourceSheet && groupConfig && groupConfig.trim() !== '') {
+        const colIndex = getColumnIndex(groupConfig);
+        if (colIndex === -1) {
+            headerRange.setValue(`${levelId}: ERRO`).setBackground(CONSTANTS.COLORS.PANEL_ERROR_BG).setFontColor(CONSTANTS.COLORS.FONT_LIGHT).setFontWeight('bold').setHorizontalAlignment('center');
+            configSheet.getRange(4, startCol).setValue('Config. inválida.').setFontColor(CONSTANTS.COLORS.FONT_SUBTLE).setFontStyle('italic');
+        } else {
+            const colHeader = getColumnHeader(groupConfig);
+            headerRange.setValue(`${levelId}: ${colHeader.toUpperCase()}`).setBackground(CONSTANTS.COLORS.SECTION_BG).setFontColor(CONSTANTS.COLORS.FONT_LIGHT).setFontWeight('bold').setHorizontalAlignment('center');
+            
+            const uniqueValues = getUniqueColumnValues(sourceSheet, colIndex);
+            if (uniqueValues.length > 0) {
+                configSheet.getRange(4, startCol, uniqueValues.length, 1).setValues(uniqueValues.map(v => [v]));
+                configSheet.getRange(4, startCol + 1, uniqueValues.length, 1).insertCheckboxes();
+            }
+        }
+    } else {
+        headerRange.setValue(levelId).setBackground(CONSTANTS.COLORS.PANEL_EMPTY_BG).setFontColor(CONSTANTS.COLORS.FONT_LIGHT).setFontWeight('bold').setHorizontalAlignment('center');
+        const message = sourceSheet ? '(Não configurado)' : '(Selecione Aba Origem)';
+        configSheet.getRange(4, startCol).setValue(message).setFontColor(CONSTANTS.COLORS.FONT_SUBTLE).setFontStyle('italic');
+    }
+
+    const lastRowInPanel = configSheet.getRange(configSheet.getMaxRows(), startCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
+    const effectiveLastRow = Math.max(3, lastRowInPanel);
+    configSheet.getRange(3, startCol, effectiveLastRow - 2, 2).setBorder(true, true, true, true, true, true, CONSTANTS.COLORS.BORDER, SpreadsheetApp.BorderStyle.SOLID);
 }
 
 
 function updateGroupingPanel() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const configSheet = ss.getSheetByName('Config');
+  const config = getAllConfigValues();
+  const sourceSheet = ss.getSheetByName(config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
   
-  ss.toast('Atualizando Painel de Agrupamento...', 'Aguarde');
-  
-  const selections = getSelectionsFromPanel(configSheet);
-  configSheet.getRange('E4:Z1000').clear();
-
-  const sourceSheet = ss.getSheetByName(getConfigValue('Aba Origem'));
-  if (!sourceSheet) return 5; // Retorna a coluna inicial se não houver aba
-
-  const groupConfigs = [getConfigValue('Agrupar por Nível 1'), getConfigValue('Agrupar por Nível 2'), getConfigValue('Agrupar por Nível 3')];
-  let currentColumn = 5;
-
-  for (let i = 0; i < groupConfigs.length; i++) {
-    const config = groupConfigs[i];
-    if (config && config.trim() !== '') {
-      const colIndex = getColumnIndex(config);
-      if (colIndex === -1) continue;
-      
-      const colHeader = getColumnHeader(config);
-      const levelId = `NÍVEL ${i+1}`;
-      
-      configSheet.getRange(4, currentColumn, 1, 2).merge().setValue(`${levelId}: ${colHeader.toUpperCase()}`).setBackground('#3498db').setFontColor('white').setFontWeight('bold').setHorizontalAlignment('center');
-      
-      const uniqueValues = getUniqueColumnValues(sourceSheet, colIndex);
-
-      if (uniqueValues.length > 0) {
-        configSheet.getRange(5, currentColumn, uniqueValues.length, 1).setValues(uniqueValues.map(v => [v]));
-        const savedSelections = selections[levelId] || new Set();
-        const checkboxes = uniqueValues.map(v => [savedSelections.has(v)]);
-        configSheet.getRange(5, currentColumn + 1, uniqueValues.length, 1).insertCheckboxes().setValues(checkboxes);
-      }
-      configSheet.setColumnWidth(currentColumn, 150).setColumnWidth(currentColumn + 1, 50);
-      currentColumn += 2; // Move para a próxima coluna disponível
-    }
-  }
-  return currentColumn; // Retorna onde o próximo painel deve começar
+  updateSingleLevelPanel(1, config, sourceSheet);
+  updateSingleLevelPanel(2, config, sourceSheet);
+  updateSingleLevelPanel(3, config, sourceSheet);
 }
 
-function getSelectionsFromPanel(sheet) {
+function getPanelSelections(sheet) {
     const selections = {};
     for (let i = 0; i < 3; i++) {
-        const startCol = 5 + (i * 2); // Ajustado para a nova largura
-        const header = sheet.getRange(4, startCol).getValue();
-        if (header) {
-            const levelId = header.split(':')[0];
-            const lastDataRow = sheet.getRange(sheet.getMaxRows(), startCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
-            if (lastDataRow >= 5) {
-                const numItems = lastDataRow - 4;
-                const values = sheet.getRange(5, startCol, numItems, 1).getValues().flat();
-                const checkboxes = sheet.getRange(5, startCol + 1, numItems, 1).getValues().flat();
-                selections[levelId] = new Set(values.filter((_, index) => checkboxes[index] === true));
-            }
+        const startCol = 5 + (i * 2);
+        const headerRange = sheet.getRange(3, startCol);
+        if (headerRange.isBlank()) continue;
+
+        const header = headerRange.getValue();
+        const levelId = header.split(':')[0].trim();
+        
+        const lastDataRow = sheet.getRange(sheet.getMaxRows(), startCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
+        if (lastDataRow >= 4) {
+            const numItems = lastDataRow - 3;
+            const values = sheet.getRange(4, startCol, numItems, 1).getValues().flat();
+            const checkboxes = sheet.getRange(4, startCol + 1, numItems, 1).getValues().flat();
+            const selectedValues = values.filter((_, index) => checkboxes[index] === true);
+            selections[levelId] = new Set(selectedValues.map(v => String(v)));
+        } else {
+            selections[levelId] = new Set();
         }
     }
     return selections;
 }
 
 // =================================================================
-// LÓGICA DE PRÉ-VISUALIZAÇÃO E PROCESSAMENTO
+// LÓGICA DE PRÉ-VISUALIZAÇÃO, PROCESSAMENTO E LIMPEZA
 // =================================================================
 
 function updatePreviewPanel(previewStartCol) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const configSheet = ss.getSheetByName('Config');
-  ss.toast('Atualizando pré-visualização...', 'Aguarde');
+  const configSheet = ss.getSheetByName(CONSTANTS.SHEETS.CONFIG);
 
   const combinations = getSelectedCombinationsFromPanel();
   
   const existingSuffixes = new Map();
   const lastPreviewRow = configSheet.getRange(configSheet.getMaxRows(), previewStartCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
-  if (lastPreviewRow >= 5) {
-      configSheet.getRange(5, previewStartCol, lastPreviewRow - 4, 3).getValues().forEach(row => {
+  if (lastPreviewRow >= 4) {
+      configSheet.getRange(4, previewStartCol, lastPreviewRow - 3, 3).getValues().forEach(row => {
           if (row[0]) existingSuffixes.set(row[0], row[2]);
       });
   }
+  configSheet.getRange(3, previewStartCol, configSheet.getMaxRows() - 2, 3).clear();
 
-  if (combinations.length === 0) {
-    ss.toast('Nenhuma combinação selecionada.', 'Aviso', 5);
-    return;
+  configSheet.getRange(3, previewStartCol, 1, 3).setValues([['COMBINAÇÃO GERADA', 'CRIAR?', 'SUFIXO KOJO FINAL']]).setBackground(CONSTANTS.COLORS.HEADER_BG).setFontColor(CONSTANTS.COLORS.FONT_LIGHT).setFontWeight('bold');
+
+  if (combinations.length > 0) {
+    const tableData = combinations.map(combo => [combo, true, existingSuffixes.get(combo) || combo]);
+    
+    configSheet.getRange(4, previewStartCol, tableData.length, 3).setValues(tableData);
+    configSheet.getRange(4, previewStartCol + 1, tableData.length, 1).insertCheckboxes();
+    configSheet.getRange(4, previewStartCol + 2, tableData.length, 1).setBackground(CONSTANTS.COLORS.INPUT_BG);
   }
-  
-  configSheet.getRange(4, previewStartCol, 1, 3).setValues([['COMBINAÇÃO GERADA', 'CRIAR?', 'SUFIXO KOJO FINAL']]).setBackground('#2c3e50').setFontColor('#ffffff').setFontWeight('bold');
-
-  const tableData = combinations.map(combo => [combo, true, existingSuffixes.get(combo) || combo]);
-  
-  configSheet.getRange(5, previewStartCol, tableData.length, 3).setValues(tableData);
-  configSheet.getRange(5, previewStartCol + 1, tableData.length, 1).insertCheckboxes();
-  configSheet.getRange(5, previewStartCol + 2, tableData.length, 1).setBackground('#ecf0f1');
   
   configSheet.setColumnWidth(previewStartCol, 250).setColumnWidth(previewStartCol + 1, 80).setColumnWidth(previewStartCol + 2, 250);
 
-  // Aplica o Row Banding para unificar visualmente
-  const lastPanelCol = configSheet.getRange(4, 4).getNextDataCell(SpreadsheetApp.Direction.RIGHT).getColumn();
-  const bandingRange = configSheet.getRange(4, 5, configSheet.getLastRow(), lastPanelCol - 4);
-  bandingRange.applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
-
-  ss.toast(`Pré-visualização atualizada!`, 'Sucesso', 5);
+  const lastCombinationRow = configSheet.getRange(configSheet.getMaxRows(), previewStartCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
+  const effectiveLastRow = Math.max(3, lastCombinationRow);
+  configSheet.getRange(3, previewStartCol, effectiveLastRow - 2, 3).setBorder(true, true, true, true, true, true, CONSTANTS.COLORS.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  
+  ss.toast(`Pré-visualização atualizada!`, 'Sucesso', 3);
 }
 
 function getSelectedCombinationsFromPanel() {
-    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
-    let selectedGroups = [];
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const configSheet = ss.getSheetByName(CONSTANTS.SHEETS.CONFIG);
+    const config = getAllConfigValues();
     
-    for (let i = 0; i < 3; i++) {
-        const startCol = 5 + (i * 2);
-        const header = configSheet.getRange(4, startCol).getValue();
-        if (header) {
-            const lastDataRow = configSheet.getRange(configSheet.getMaxRows(), startCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
-            if(lastDataRow >= 5) {
-                const numItems = lastDataRow - 4;
-                const values = configSheet.getRange(5, startCol, numItems, 1).getValues().flat();
-                const checkboxes = configSheet.getRange(5, startCol + 1, numItems, 1).getValues().flat();
-                const selected = values.filter((_, index) => checkboxes[index] === true);
-                if (selected.length > 0) selectedGroups.push(selected);
-            }
-        }
-    }
+    const sourceSheet = ss.getSheetByName(config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
+    if (!sourceSheet) return [];
 
-    if (selectedGroups.length === 0) return [];
-    if (selectedGroups.length === 1) return selectedGroups[0].map(String);
-    return selectedGroups.reduce((a, b) => a.flatMap(x => b.map(y => `${x}.${y}`)));
+    const groupConfigs = [
+        config[CONSTANTS.CONFIG_KEYS.GROUP_L1], 
+        config[CONSTANTS.CONFIG_KEYS.GROUP_L2], 
+        config[CONSTANTS.CONFIG_KEYS.GROUP_L3]
+    ].filter(Boolean);
+    
+    if (groupConfigs.length === 0) return [];
+
+    const groupIndices = groupConfigs.map(getColumnIndex);
+    const panelSelections = getPanelSelections(configSheet);
+    
+    const activeSelectionLevels = Object.keys(panelSelections).filter(level => panelSelections[level].size > 0);
+    if (activeSelectionLevels.length === 0) return [];
+
+    const allData = sourceSheet.getRange(2, 1, sourceSheet.getLastRow() - 1, sourceSheet.getLastColumn()).getValues();
+    const existingCombinations = new Set();
+
+    allData.forEach(row => {
+        const combinationParts = groupIndices.map(index => String(row[index - 1]));
+        if (combinationParts.every(part => part && part.trim() !== '')) {
+            existingCombinations.add(combinationParts.join('.'));
+        }
+    });
+
+    const finalCombinations = [...existingCombinations].filter(combo => {
+        const parts = combo.split('.');
+        return parts.every((part, i) => {
+            const levelId = `NÍVEL ${i + 1}`;
+            return panelSelections[levelId] && panelSelections[levelId].has(part);
+        });
+    });
+
+    return finalCombinations.sort();
 }
 
 
@@ -358,30 +480,30 @@ function runProcessingWithFeedback() {
 
 function runProcessing() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const configSheet = ss.getSheetByName('Config');
-  const previewStartCol = 5 + (getConfigValue('Agrupar por Nível 3') ? 6 : getConfigValue('Agrupar por Nível 2') ? 4 : getConfigValue('Agrupar por Nível 1') ? 2 : 0);
+  const config = getAllConfigValues();
+  const configSheet = ss.getSheetByName(CONSTANTS.SHEETS.CONFIG);
+  
+  const previewStartCol = 11;
   
   const lastPreviewRow = configSheet.getRange(configSheet.getMaxRows(), previewStartCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
   
-  if (lastPreviewRow < 5) {
-    return { success: false, message: 'Nenhuma combinação encontrada na pré-visualização.' };
-  }
+  if (lastPreviewRow < 4) return { success: false, message: 'Nenhuma combinação encontrada na pré-visualização.' };
   
-  const previewData = configSheet.getRange(5, previewStartCol, lastPreviewRow - 4, 3).getValues();
+  const previewData = configSheet.getRange(4, previewStartCol, lastPreviewRow - 3, 3).getValues();
   const combinationsToProcess = previewData.filter(row => row[1] === true).map(row => ({ combination: row[0], kojoSuffix: row[2] }));
 
-  if (combinationsToProcess.length === 0) {
-    return { success: false, message: 'Nenhum relatório selecionado para criação.' };
-  }
+  if (combinationsToProcess.length === 0) return { success: false, message: 'Nenhum relatório selecionado para criação.' };
   
-  const sourceSheet = ss.getSheetByName(getConfigValue('Aba Origem'));
-  if (!sourceSheet) {
-      return { success: false, message: 'Aba de origem não encontrada.' };
-  }
+  const sourceSheet = ss.getSheetByName(config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
+  if (!sourceSheet) return { success: false, message: 'Aba de origem não encontrada.' };
 
-  const groupConfigs = [getConfigValue('Agrupar por Nível 1'), getConfigValue('Agrupar por Nível 2'), getConfigValue('Agrupar por Nível 3')].filter(Boolean);
+  const groupConfigs = [config[CONSTANTS.CONFIG_KEYS.GROUP_L1], config[CONSTANTS.CONFIG_KEYS.GROUP_L2], config[CONSTANTS.CONFIG_KEYS.GROUP_L3]].filter(Boolean);
   const groupIndices = groupConfigs.map(getColumnIndex);
-  const bomCols = { c1: getColumnIndex(getConfigValue('Coluna 1')), c2: getColumnIndex(getConfigValue('Coluna 2')), c3: getColumnIndex(getConfigValue('Coluna 3')), c4: getColumnIndex(getConfigValue('Coluna 4')), c5: getColumnIndex(getConfigValue('Coluna 5')) };
+  const bomCols = {
+      c1: getColumnIndex(config[CONSTANTS.CONFIG_KEYS.COL_1]), c2: getColumnIndex(config[CONSTANTS.CONFIG_KEYS.COL_2]),
+      c3: getColumnIndex(config[CONSTANTS.CONFIG_KEYS.COL_3]), c4: getColumnIndex(config[CONSTANTS.CONFIG_KEYS.COL_4]),
+      c5: getColumnIndex(config[CONSTANTS.CONFIG_KEYS.COL_5])
+  };
 
   const dataMap = new Map();
   combinationsToProcess.forEach(item => dataMap.set(item.combination, []));
@@ -426,14 +548,53 @@ function groupAndSumData(data) {
   return Object.values(grouped).sort((a, b) => String(a[0]).localeCompare(String(b[0]), undefined, { numeric: true }));
 }
 
+function clearOldReports() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert('Confirmação', 'Tem a certeza de que deseja apagar TODAS as abas de relatório? Esta ação não pode ser desfeita.', ui.ButtonSet.YES_NO);
+
+  if (response == ui.Button.YES) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const config = getAllConfigValues();
+    const protectedSheets = [CONSTANTS.SHEETS.CONFIG, config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]].filter(Boolean);
+    
+    let deletedCount = 0;
+    ss.getSheets().forEach(sheet => {
+      const sheetName = sheet.getName();
+      if (!protectedSheets.includes(sheetName)) {
+        ss.deleteSheet(sheet);
+        deletedCount++;
+      }
+    });
+    
+    if (deletedCount > 0) {
+      ui.alert('Limpeza Concluída', `${deletedCount} abas de relatório foram removidas.`, ui.ButtonSet.OK);
+    } else {
+      ui.alert('Limpeza', 'Nenhuma aba de relatório para remover.', ui.ButtonSet.OK);
+    }
+  }
+}
+
 // =================================================================
 // FORMATAÇÃO E EXPORTAÇÃO
 // =================================================================
 
 function createAndFormatReport(sheet, combination, kojoSuffix, data) {
-    const config = { project: getConfigValue('Project'), bom: getConfigValue('BOM'), kojoPrefix: getConfigValue('KOJO Prefixo'), engineer: getConfigValue('Engenheiro'), version: formatVersion(getConfigValue('Versão')) };
-    const headers = { h1: getColumnHeader(getConfigValue('Coluna 1')), h2: getColumnHeader(getConfigValue('Coluna 2')), h3: getColumnHeader(getConfigValue('Coluna 3')), h4: getColumnHeader(getConfigValue('Coluna 4')), h5: 'QTY' };
-    const headerValues = createHeaderData(config, kojoSuffix);
+    const config = getAllConfigValues();
+    const reportConfig = { 
+        project: config[CONSTANTS.CONFIG_KEYS.PROJECT], 
+        bom: config[CONSTANTS.CONFIG_KEYS.BOM], 
+        kojoPrefix: config[CONSTANTS.CONFIG_KEYS.KOJO_PREFIX], 
+        engineer: config[CONSTANTS.CONFIG_KEYS.ENGINEER], 
+        version: formatVersion(config[CONSTANTS.CONFIG_KEYS.VERSION]) 
+    };
+    const headers = { 
+        h1: getColumnHeader(config[CONSTANTS.CONFIG_KEYS.COL_1]), 
+        h2: getColumnHeader(config[CONSTANTS.CONFIG_KEYS.COL_2]), 
+        h3: getColumnHeader(config[CONSTANTS.CONFIG_KEYS.COL_3]), 
+        h4: getColumnHeader(config[CONSTANTS.CONFIG_KEYS.COL_4]), 
+        h5: 'QTY' 
+    };
+    const headerValues = createHeaderData(reportConfig, kojoSuffix);
     sheet.getRange(1, 1, headerValues.length, 2).setValues(headerValues);
     formatHeader(sheet, headerValues.length);
     const dataStartRow = headerValues.length + 2;
@@ -444,12 +605,12 @@ function createAndFormatReport(sheet, combination, kojoSuffix, data) {
     protectHeader(sheet, dataStartRow - 1);
 }
 
-function createHeaderData(config, kojoSuffix) {
+function createHeaderData(reportConfig, kojoSuffix) {
   const lastUpdate = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'MM/dd/yyyy');
-  const bomKojoComplete = `${config.kojoPrefix}.${kojoSuffix}`;
+  const bomKojoComplete = `${reportConfig.kojoPrefix}.${kojoSuffix}`;
   return [
-    ['PROJECT:', config.project], ['BOM:', config.bom], ['BOM KOJO:', bomKojoComplete],
-    ['ENG.:', config.engineer], ['VERSION:', config.version], ['LAST UPDATE:', lastUpdate]
+    ['PROJECT:', reportConfig.project], ['BOM:', reportConfig.bom], ['BOM KOJO:', bomKojoComplete],
+    ['ENG.:', reportConfig.engineer], ['VERSION:', reportConfig.version], ['LAST UPDATE:', lastUpdate]
   ];
 }
 
@@ -497,7 +658,8 @@ function exportSelectedPDFs(selectedSheets) {
   try {
     const folder = getOrCreateOutputFolder();
     if (!folder) return { success: false, message: 'Pasta de destino não configurada ou inválida.' };
-    const prefix = getConfigValue('PDF Prefixo') || 'Relatorio';
+    const config = getAllConfigValues();
+    const prefix = config[CONSTANTS.CONFIG_KEYS.PDF_PREFIX] || 'Relatorio';
     selectedSheets.forEach(sheetName => {
       const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
       if (sheet) exportSheetToPdf(sheet, `${prefix}_${sheetName}`, folder);
@@ -509,10 +671,11 @@ function exportSelectedPDFs(selectedSheets) {
 }
 
 function getOrCreateOutputFolder() {
-  const folderInput = getConfigValue('Pasta Drive ID');
-  const folderName = getConfigValue('Pasta Nome');
+  const config = getAllConfigValues();
+  const folderInput = config[CONSTANTS.CONFIG_KEYS.DRIVE_FOLDER_ID];
+  const folderName = config[CONSTANTS.CONFIG_KEYS.DRIVE_FOLDER_NAME];
   try {
-    if (folderInput) return DriveApp.getFolderById(extractFolderIdFromUrl(folderInput));
+    if (folderInput) return DriveApp.getFolderById(extractFolderIdFromurl(folderInput));
     if (folderName) {
       const folders = DriveApp.getFoldersByName(folderName);
       return folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
@@ -547,13 +710,15 @@ function exportSheetToPdf(sheet, pdfName, folder) {
 }
 
 function getReportSheetNames() {
-  return SpreadsheetApp.getActiveSpreadsheet().getSheets().map(s => s.getName()).filter(name => name !== 'Config');
+  const config = getAllConfigValues();
+  return SpreadsheetApp.getActiveSpreadsheet().getSheets().map(s => s.getName()).filter(name => name !== CONSTANTS.SHEETS.CONFIG && name !== config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
 }
 
 function testSystem() {
+    const config = getAllConfigValues();
     const combinations = getSelectedCombinationsFromPanel();
-    const message = `Diagnóstico do Sistema:\n- Modo de Agrupamento: Interativo (3 Níveis)\n- Combinações Selecionadas no Painel: ${combinations.length}\n- Aba de Origem: ${getConfigValue('Aba Origem') || "Não configurada"}\n\nO sistema está operando com a lógica de agrupamento mais recente e otimizações de cache.`;
+    const message = `Diagnóstico do Sistema:\n- Modo de Agrupamento: Interativo (3 Níveis)\n- Combinações Selecionadas no Painel: ${combinations.length}\n- Aba de Origem: ${config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET] || "Não configurada"}\n\nO sistema está operando com a lógica de agrupamento mais recente e otimizações de cache.`;
     SpreadsheetApp.getUi().alert('Diagnóstico', message, SpreadsheetApp.getUi().ButtonSet.OK);
-    return { "Modo de Agrupamento": "Interativo (3 Níveis)", "Combinações Selecionadas": combinations.length, "Aba de Origem": getConfigValue('Aba Origem') || "Não configurada" };
+    return { "Modo de Agrupamento": "Interativo (3 Níveis)", "Combinações Selecionadas": combinations.length, "Aba de Origem": config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET] || "Não configurada" };
 }
 
