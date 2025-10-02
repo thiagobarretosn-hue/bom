@@ -2,12 +2,12 @@
  * @OnlyCurrentDoc
  * SCRIPT DE AUTOMAÇÃO DE RELATÓRIOS DINÂMICOS - VERSÃO COM PAINEL UNIFICADO
  *
- * REVISÃO 30.0 (REFINAMENTO DE PERFORMANCE FINAL):
- * - ATUALIZAÇÕES INDIVIDUALIZADAS: O script agora identifica qual nível de agrupamento foi alterado e atualiza
- * APENAS o painel correspondente. Isto elimina completamente o efeito de "piscar" e a recriação desnecessária
- * dos outros painéis, resultando numa experiência de utilização instantânea e fluida.
- * - LÓGICA OTIMIZADA: A função onEdit foi reestruturada para ser mais granular, chamando funções de atualização
- * específicas para cada painel, maximizando a performance.
+ * REVISÃO 31.0 (CACHE INTELIGENTE):
+ * - LIMPEZA AUTOMÁTICA DE CACHE: O script agora detecta edições na 'Aba Origem' e limpa
+ * automaticamente o cache de dados. Isso garante que os painéis e relatórios
+ * sempre utilizarão as informações mais recentes, evitando inconsistências.
+ * - OTIMIZAÇÃO DO GATILHO onEdit: A função foi reestruturada para lidar com edições tanto
+ * na aba de 'Config' (para atualizar a UI) quanto na 'Aba Origem' (para limpar o cache).
  */
 
 // =================================================================
@@ -53,7 +53,8 @@ const CONSTANTS = {
     PANEL_EMPTY_BG: '#95a5a6',
     PANEL_ERROR_BG: '#c0392b'
   },
-  CACHE_EXPIRATION_SECONDS: 600, // Cache expira em 10 minutos
+  CACHE_EXPIRATION_SECONDS: 180, // Cache expira em 3 minutos
+  COMBINATION_DELIMITER: '|||', // Delimitador para evitar conflito com dados que contenham "."
 };
 
 
@@ -68,6 +69,7 @@ function onOpen() {
       .addSeparator()
       .addItem('🗑️ Limpar Relatórios Antigos', 'clearOldReports')
       .addSeparator()
+      .addItem('🔄 Forçar Atualização (Limpar Cache)', 'forceRefreshPanels')
       .addItem('🧪 Diagnóstico', 'testSystem')
       .addItem('🔧 Recriar Config', 'forceCreateConfig')
       .addToUi();
@@ -83,7 +85,7 @@ function openConfigSidebar() {
                            .setTitle(CONSTANTS.UI.SIDEBAR_TITLE)
                            .setWidth(320);
     SpreadsheetApp.getUi().showSidebar(html);
-  } catch (error)    {
+  } catch (error) {
     console.error('Erro ao abrir a sidebar:', error);
     SpreadsheetApp.getUi().alert(`Erro ao carregar o Painel de Controle. Verifique se o arquivo '${CONSTANTS.UI.SIDEBAR_FILE}' existe.`);
   }
@@ -261,57 +263,105 @@ function updateConfigDropdownsAuto() {
 }
 
 /**
- * ATUALIZADO: Lógica granular para redesenhar apenas os painéis necessários.
+ * ATUALIZADO: Lógica expandida para limpar o cache automaticamente quando a aba de origem é editada.
  */
 function onEdit(e) {
     if (!e || !e.source) return;
     const sheet = e.source.getActiveSheet();
+    const sheetName = sheet.getName();
     const range = e.range;
-    if (sheet.getName() !== CONSTANTS.SHEETS.CONFIG) return;
-    
-    CacheService.getScriptCache().remove('all_config_values');
-    const col = range.getColumn();
-    const row = range.getRow();
 
-    // Se a configuração de agrupamento principal for alterada
-    if (col === 2 && row >= 4 && row <= 7) { 
-        Utilities.sleep(200);
-        const config = getAllConfigValues();
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const sourceSheet = ss.getSheetByName(config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
-        
-        switch (row) {
-            case 4: // Aba Origem mudou: redesenha tudo
-                SpreadsheetApp.getActiveSpreadsheet().toast('Aba de origem alterada, recriando painel...', 'Aguarde', 3);
-                updateConfigDropdownsAuto();
-                updateGroupingPanel();
-                break;
-            case 5: // Nível 1 mudou: redesenha apenas o painel 1
-                SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando Nível 1...', 'Aguarde', 2);
-                updateSingleLevelPanel(1, config, sourceSheet);
-                break;
-            case 6: // Nível 2 mudou: redesenha apenas o painel 2
-                SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando Nível 2...', 'Aguarde', 2);
-                updateSingleLevelPanel(2, config, sourceSheet);
-                break;
-            case 7: // Nível 3 mudou: redesenha apenas o painel 3
-                SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando Nível 3...', 'Aguarde', 2);
-                updateSingleLevelPanel(3, config, sourceSheet);
-                break;
-        }
-        updatePreviewPanel(11); // A pré-visualização sempre atualiza
+    // Pega as configurações para saber qual é a aba de origem.
+    // A função `getAllConfigValues` usa cache, então esta chamada é rápida.
+    const config = getAllConfigValues();
+    const sourceSheetName = config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET];
+
+    // Cenário 1: A aba de origem de dados foi editada.
+    // Limpa o cache para garantir que a próxima operação use dados atualizados.
+    if (sheetName === sourceSheetName) {
+        clearSourceDataCache(config, sheet);
+        SpreadsheetApp.getActiveSpreadsheet().toast('Fonte de dados modificada. Cache atualizado.', 'Informação', 3);
+        return; // Sai após limpar o cache.
     }
-    
-    // Se for um clique na checkbox, atualiza APENAS a pré-visualização
-    if (col >= 6 && row >= 4 && range.getWidth() === 1 && range.getDataValidation() && range.getDataValidation().getCriteriaType() === SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
-        SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando combinações...', 'Aguarde', 2);
-        updatePreviewPanel(11);
+
+    // Cenário 2: A aba 'Config' foi editada.
+    // Lógica existente para atualizar os painéis de IU.
+    if (sheetName === CONSTANTS.SHEETS.CONFIG) {
+        CacheService.getScriptCache().remove('all_config_values');
+        const col = range.getColumn();
+        const row = range.getRow();
+
+        // Se a configuração de agrupamento ou aba de origem for alterada
+        if (col === 2 && row >= 4 && row <= 7) {
+            Utilities.sleep(200);
+            const updatedConfig = getAllConfigValues(); // Re-busca as configs que acabaram de ser alteradas.
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const sourceSheet = ss.getSheetByName(updatedConfig[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
+
+            switch (row) {
+                case 4: // Aba Origem mudou: redesenha tudo
+                    SpreadsheetApp.getActiveSpreadsheet().toast('Aba de origem alterada, recriando painel...', 'Aguarde', 3);
+                    updateConfigDropdownsAuto();
+                    updateGroupingPanel();
+                    break;
+                case 5: // Nível 1 mudou: redesenha apenas o painel 1
+                    SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando Nível 1...', 'Aguarde', 2);
+                    updateSingleLevelPanel(1, updatedConfig, sourceSheet);
+                    break;
+                case 6: // Nível 2 mudou: redesenha apenas o painel 2
+                    SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando Nível 2...', 'Aguarde', 2);
+                    updateSingleLevelPanel(2, updatedConfig, sourceSheet);
+                    break;
+                case 7: // Nível 3 mudou: redesenha apenas o painel 3
+                    SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando Nível 3...', 'Aguarde', 2);
+                    updateSingleLevelPanel(3, updatedConfig, sourceSheet);
+                    break;
+            }
+            updatePreviewPanel(11); // A pré-visualização sempre atualiza
+        }
+
+        // Se uma checkbox no painel for clicada, atualiza apenas a pré-visualização
+        if ((col === 6 || col === 8 || col === 10) && row >= 4 && range.getWidth() === 1 && range.getDataValidation() && range.getDataValidation().getCriteriaType() === SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
+            SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando combinações...', 'Aguarde', 2);
+            updatePreviewPanel(11);
+        }
     }
 }
 
 /**
- * ATUALIZADO: Nova função para atualizar um único painel de nível.
+ * Limpa o cache relacionado aos dados da aba de origem.
+ * Chamado automaticamente quando a aba de origem é editada.
+ * @param {Object} config O objeto de configuração atual.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sourceSheet A instância da aba de origem.
  */
+function clearSourceDataCache(config, sourceSheet) {
+    const cache = CacheService.getScriptCache();
+    cache.remove('all_config_values');
+
+    if (sourceSheet) {
+        const sourceSheetId = sourceSheet.getSheetId();
+        const groupConfigs = [
+            config[CONSTANTS.CONFIG_KEYS.GROUP_L1],
+            config[CONSTANTS.CONFIG_KEYS.GROUP_L2],
+            config[CONSTANTS.CONFIG_KEYS.GROUP_L3]
+        ].filter(Boolean);
+
+        const cacheKeysToRemove = groupConfigs.map(conf => {
+            const colIndex = getColumnIndex(conf);
+            if (colIndex !== -1) {
+                return `unique_${sourceSheetId}_${colIndex}`;
+            }
+            return null;
+        }).filter(Boolean);
+
+        if (cacheKeysToRemove.length > 0) {
+            cache.removeAll(cacheKeysToRemove);
+        }
+    }
+}
+
+
+// Função updateSingleLevelPanel - MELHORADA
 function updateSingleLevelPanel(level, config, sourceSheet) {
     const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONSTANTS.SHEETS.CONFIG);
     const startCol = 5 + (level - 1) * 2;
@@ -319,9 +369,7 @@ function updateSingleLevelPanel(level, config, sourceSheet) {
     const groupConfigKey = `Agrupar por Nível ${level}`;
     const groupConfig = config[groupConfigKey];
 
-    // Limpa apenas a área do painel específico
     configSheet.getRange(3, startCol, configSheet.getMaxRows() - 2, 2).clear();
-
     configSheet.setColumnWidth(startCol, 150).setColumnWidth(startCol + 1, 50);
     const headerRange = configSheet.getRange(3, startCol, 1, 2).merge();
 
@@ -336,8 +384,10 @@ function updateSingleLevelPanel(level, config, sourceSheet) {
             
             const uniqueValues = getUniqueColumnValues(sourceSheet, colIndex);
             if (uniqueValues.length > 0) {
-                configSheet.getRange(4, startCol, uniqueValues.length, 1).setValues(uniqueValues.map(v => [v]));
-                configSheet.getRange(4, startCol + 1, uniqueValues.length, 1).insertCheckboxes();
+                // MELHORIA: Mantém o tipo original dos valores
+                const valuesFormatted = uniqueValues.map(v => [v === null || v === undefined || v === '' ? '' : v]);
+                configSheet.getRange(4, startCol, valuesFormatted.length, 1).setValues(valuesFormatted);
+                configSheet.getRange(4, startCol + 1, valuesFormatted.length, 1).insertCheckboxes();
             }
         }
     } else {
@@ -362,6 +412,7 @@ function updateGroupingPanel() {
   updateSingleLevelPanel(3, config, sourceSheet);
 }
 
+// Função getPanelSelections - MELHORADA
 function getPanelSelections(sheet) {
     const selections = {};
     for (let i = 0; i < 3; i++) {
@@ -377,8 +428,17 @@ function getPanelSelections(sheet) {
             const numItems = lastDataRow - 3;
             const values = sheet.getRange(4, startCol, numItems, 1).getValues().flat();
             const checkboxes = sheet.getRange(4, startCol + 1, numItems, 1).getValues().flat();
-            const selectedValues = values.filter((_, index) => checkboxes[index] === true);
-            selections[levelId] = new Set(selectedValues.map(v => String(v)));
+            
+            // CORREÇÃO: Mantém valores originais (número/texto) sem forçar conversão
+            const selectedValues = values
+                .map((v, index) => ({value: v, checked: checkboxes[index]}))
+                .filter(item => item.checked === true)
+                .map(item => {
+                    const val = item.value;
+                    return val === null || val === undefined || val === '' ? '' : val;
+                });
+            
+            selections[levelId] = new Set(selectedValues);
         } else {
             selections[levelId] = new Set();
         }
@@ -424,6 +484,7 @@ function updatePreviewPanel(previewStartCol) {
   ss.toast(`Pré-visualização atualizada!`, 'Sucesso', 3);
 }
 
+// Função getSelectedCombinationsFromPanel - CORRIGIDA
 function getSelectedCombinationsFromPanel() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const configSheet = ss.getSheetByName(CONSTANTS.SHEETS.CONFIG);
@@ -450,21 +511,47 @@ function getSelectedCombinationsFromPanel() {
     const existingCombinations = new Set();
 
     allData.forEach(row => {
-        const combinationParts = groupIndices.map(index => String(row[index - 1]));
-        if (combinationParts.every(part => part && part.trim() !== '')) {
-            existingCombinations.add(combinationParts.join('.'));
+        const combinationParts = groupIndices.map(index => {
+            const value = row[index - 1];
+            // CORREÇÃO: Converte consistentemente, mantendo diferença entre número e texto
+            return value === null || value === undefined || value === '' ? '' : String(value).trim();
+        });
+        
+        if (combinationParts.every(part => part !== '')) {
+            existingCombinations.add(combinationParts.join(CONSTANTS.COMBINATION_DELIMITER));
         }
     });
 
     const finalCombinations = [...existingCombinations].filter(combo => {
-        const parts = combo.split('.');
+        const parts = combo.split(CONSTANTS.COMBINATION_DELIMITER);
         return parts.every((part, i) => {
             const levelId = `NÍVEL ${i + 1}`;
-            return panelSelections[levelId] && panelSelections[levelId].has(part);
+            if (!panelSelections[levelId]) return false;
+            
+            // CORREÇÃO: Compara considerando tipos mistos (número/texto)
+            const normalizedPart = part.trim();
+            return Array.from(panelSelections[levelId]).some(selected => 
+                String(selected).trim() === normalizedPart
+            );
         });
     });
 
-    return finalCombinations.sort();
+    return finalCombinations.sort((a, b) => {
+        // MELHORIA: Ordenação que lida com números e texto
+        const aParts = a.split(CONSTANTS.COMBINATION_DELIMITER);
+        const bParts = b.split(CONSTANTS.COMBINATION_DELIMITER);
+        for (let i = 0; i < Math.min(aParts.length, bParts.length); i++) {
+            const aNum = parseFloat(aParts[i]);
+            const bNum = parseFloat(bParts[i]);
+            if (!isNaN(aNum) && !isNaN(bNum)) {
+                if (aNum !== bNum) return aNum - bNum;
+            } else {
+                const comparison = aParts[i].localeCompare(bParts[i], undefined, {numeric: true});
+                if (comparison !== 0) return comparison;
+            }
+        }
+        return aParts.length - bParts.length;
+    });
 }
 
 
@@ -478,6 +565,7 @@ function runProcessingWithFeedback() {
     }
 }
 
+// Função runProcessing - CORRIGIDA para lidar com tipos mistos
 function runProcessing() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const config = getAllConfigValues();
@@ -511,9 +599,17 @@ function runProcessing() {
   const allData = sourceSheet.getRange(2, 1, sourceSheet.getLastRow() - 1, sourceSheet.getLastColumn()).getValues();
 
   for (const row of allData) {
-      const rowCombination = groupIndices.map(index => row[index - 1]).join('.');
+      // CORREÇÃO: Normaliza valores mantendo consistência com a geração de combinações
+      const rowCombination = groupIndices.map(index => {
+          const value = row[index - 1];
+          return value === null || value === undefined || value === '' ? '' : String(value).trim();
+      }).join(CONSTANTS.COMBINATION_DELIMITER);
+      
       if (dataMap.has(rowCombination)) {
-          dataMap.get(rowCombination).push([ row[bomCols.c1 - 1], row[bomCols.c2 - 1], row[bomCols.c3 - 1], row[bomCols.c4 - 1], parseFloat(row[bomCols.c5 - 1]) || 0 ]);
+          dataMap.get(rowCombination).push([  
+              row[bomCols.c1 - 1], row[bomCols.c2 - 1], row[bomCols.c3 - 1], 
+              row[bomCols.c4 - 1], parseFloat(row[bomCols.c5 - 1]) || 0 
+          ]);
       }
   }
   
@@ -545,7 +641,8 @@ function groupAndSumData(data) {
       grouped[key] = [...row];
     }
   });
-  return Object.values(grouped).sort((a, b) => String(a[0]).localeCompare(String(b[0]), undefined, { numeric: true }));
+  // AJUSTE: Ordena os dados pela segunda coluna (DESC) em ordem alfabética.
+  return Object.values(grouped).sort((a, b) => String(a[1]).localeCompare(String(b[1]), undefined, { numeric: false }));
 }
 
 function clearOldReports() {
@@ -712,6 +809,47 @@ function exportSheetToPdf(sheet, pdfName, folder) {
 function getReportSheetNames() {
   const config = getAllConfigValues();
   return SpreadsheetApp.getActiveSpreadsheet().getSheets().map(s => s.getName()).filter(name => name !== CONSTANTS.SHEETS.CONFIG && name !== config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
+}
+
+/**
+ * NOVA FUNÇÃO: Limpa o cache manualmente e força a atualização dos painéis.
+ */
+function forceRefreshPanels() {
+    SpreadsheetApp.getActiveSpreadsheet().toast('Limpando cache e atualizando painéis...', 'Aguarde', -1);
+    
+    // Remove o cache que armazena os valores de configuração.
+    CacheService.getScriptCache().remove('all_config_values');
+    
+    // Para limpar os caches de valores únicos dinâmicos, precisamos obter o ID da planilha e os índices das colunas.
+    const config = getAllConfigValues(); // Isso buscará uma nova cópia das configurações.
+    const sourceSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
+    
+    if (sourceSheet) {
+        const sourceSheetId = sourceSheet.getSheetId();
+        const groupConfigs = [
+            config[CONSTANTS.CONFIG_KEYS.GROUP_L1],
+            config[CONSTANTS.CONFIG_KEYS.GROUP_L2],
+            config[CONSTANTS.CONFIG_KEYS.GROUP_L3]
+        ].filter(Boolean);
+        
+        const cacheKeysToRemove = groupConfigs.map(conf => {
+            const colIndex = getColumnIndex(conf);
+            if (colIndex !== -1) {
+                return `unique_${sourceSheetId}_${colIndex}`;
+            }
+            return null;
+        }).filter(Boolean);
+        
+        if (cacheKeysToRemove.length > 0) {
+            CacheService.getScriptCache().removeAll(cacheKeysToRemove);
+        }
+    }
+    
+    // Agora, força a atualização dos painéis com dados novos.
+    updateGroupingPanel();
+    updatePreviewPanel(11);
+    
+    SpreadsheetApp.getActiveSpreadsheet().toast('Painéis atualizados com os dados mais recentes!', 'Sucesso', 5);
 }
 
 function testSystem() {
