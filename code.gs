@@ -106,7 +106,9 @@ function getAllConfigValues() {
     const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONSTANTS.SHEETS.CONFIG);
     if (!configSheet) return {};
     
-    const values = configSheet.getRange("A1:B" + configSheet.getLastRow()).getValues();
+    // Usa getDisplayValues() para garantir que a formatação (ex: "01") seja lida como texto.
+    const values = configSheet.getRange("A1:B" + configSheet.getLastRow()).getDisplayValues();
+
     const config = {};
     values.forEach(row => {
         const key = row[0].toString().trim();
@@ -291,6 +293,17 @@ function onEdit(e) {
         const col = range.getColumn();
         const row = range.getRow();
 
+        // Formata a versão automaticamente ao ser editada (célula B21).
+        if (col === 2 && row === 21) {
+            const currentValue = range.getValue();
+            const formattedValue = formatVersion(currentValue);
+            // Compara como texto para evitar problemas e só atualiza se for diferente,
+            // prevenindo um loop infinito de edições.
+            if (String(currentValue) !== String(formattedValue)) {
+                range.setValue(formattedValue);
+            }
+        }
+
         // Se a configuração de agrupamento ou aba de origem for alterada
         if (col === 2 && row >= 4 && row <= 7) {
             Utilities.sleep(200);
@@ -453,6 +466,7 @@ function getPanelSelections(sheet) {
 function updatePreviewPanel(previewStartCol) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const configSheet = ss.getSheetByName(CONSTANTS.SHEETS.CONFIG);
+  const internalDataCol = previewStartCol + 3; // Coluna N para dados internos
 
   const combinations = getSelectedCombinationsFromPanel();
   
@@ -463,19 +477,24 @@ function updatePreviewPanel(previewStartCol) {
           if (row[0]) existingSuffixes.set(row[0], row[2]);
       });
   }
-  configSheet.getRange(3, previewStartCol, configSheet.getMaxRows() - 2, 3).clear();
+  configSheet.getRange(3, previewStartCol, configSheet.getMaxRows() - 2, 4).clear(); // Limpa 4 colunas
 
   configSheet.getRange(3, previewStartCol, 1, 3).setValues([['COMBINAÇÃO GERADA', 'CRIAR?', 'SUFIXO KOJO FINAL']]).setBackground(CONSTANTS.COLORS.HEADER_BG).setFontColor(CONSTANTS.COLORS.FONT_LIGHT).setFontWeight('bold');
 
   if (combinations.length > 0) {
-    const tableData = combinations.map(combo => [combo, true, existingSuffixes.get(combo) || combo]);
+    const tableData = combinations.map(combo => {
+      const displayCombo = combo.replace(/\|\|\|/g, '.');
+      const kojoSuffix = existingSuffixes.get(combo) || displayCombo;
+      return [displayCombo, true, kojoSuffix, combo]; // Adiciona o combo original na 4ª coluna
+    });
     
-    configSheet.getRange(4, previewStartCol, tableData.length, 3).setValues(tableData);
+    configSheet.getRange(4, previewStartCol, tableData.length, 4).setValues(tableData); // Escreve 4 colunas
     configSheet.getRange(4, previewStartCol + 1, tableData.length, 1).insertCheckboxes();
     configSheet.getRange(4, previewStartCol + 2, tableData.length, 1).setBackground(CONSTANTS.COLORS.INPUT_BG);
   }
   
   configSheet.setColumnWidth(previewStartCol, 250).setColumnWidth(previewStartCol + 1, 80).setColumnWidth(previewStartCol + 2, 250);
+  configSheet.hideColumns(internalDataCol); // Oculta a coluna com os dados internos
 
   const lastCombinationRow = configSheet.getRange(configSheet.getMaxRows(), previewStartCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
   const effectiveLastRow = Math.max(3, lastCombinationRow);
@@ -565,10 +584,14 @@ function runProcessingWithFeedback() {
     }
 }
 
-// Função runProcessing - CORRIGIDA para lidar com tipos mistos
+
 function runProcessing() {
+  // Limpa o cache de configuração no início de cada execução para garantir
+  // que os dados lidos da aba 'Config' sejam sempre os mais recentes.
+  CacheService.getScriptCache().remove('all_config_values');
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const config = getAllConfigValues();
+  const config = getAllConfigValues(); // Agora, esta chamada sempre lerá da planilha.
   const configSheet = ss.getSheetByName(CONSTANTS.SHEETS.CONFIG);
   
   const previewStartCol = 11;
@@ -577,8 +600,12 @@ function runProcessing() {
   
   if (lastPreviewRow < 4) return { success: false, message: 'Nenhuma combinação encontrada na pré-visualização.' };
   
-  const previewData = configSheet.getRange(4, previewStartCol, lastPreviewRow - 3, 3).getValues();
-  const combinationsToProcess = previewData.filter(row => row[1] === true).map(row => ({ combination: row[0], kojoSuffix: row[2] }));
+  const previewData = configSheet.getRange(4, previewStartCol, lastPreviewRow - 3, 4).getValues(); // Lê 4 colunas
+  const combinationsToProcess = previewData.filter(row => row[1] === true).map(row => ({ 
+      displayCombination: String(row[0]), // Valor visual com "."
+      combination: String(row[3]), // Valor interno com "|||"
+      kojoSuffix: row[2] 
+  }));
 
   if (combinationsToProcess.length === 0) return { success: false, message: 'Nenhum relatório selecionado para criação.' };
   
@@ -615,12 +642,13 @@ function runProcessing() {
   
   let createdCount = 0;
   for (const item of combinationsToProcess) {
-      const { combination, kojoSuffix } = item;
-      const rawData = dataMap.get(combination);
+      const { displayCombination, combination, kojoSuffix } = item;
+      const rawData = dataMap.get(combination); // Usa o valor interno para busca
       if (!rawData || rawData.length === 0) continue;
       
       const processedData = groupAndSumData(rawData);
-      const sanitizedName = combination.toString().replace(/[\/\\\?\*\[\]:]/g, '_').substring(0, 100);
+      // Usa o valor visual para o nome da aba
+      const sanitizedName = displayCombination.toString().replace(/[\/\\\?\*\[\]:]/g, '_').substring(0, 100);
       let targetSheet = ss.getSheetByName(sanitizedName) || ss.insertSheet(sanitizedName);
       targetSheet.clear();
 
@@ -682,7 +710,7 @@ function createAndFormatReport(sheet, combination, kojoSuffix, data) {
         bom: config[CONSTANTS.CONFIG_KEYS.BOM], 
         kojoPrefix: config[CONSTANTS.CONFIG_KEYS.KOJO_PREFIX], 
         engineer: config[CONSTANTS.CONFIG_KEYS.ENGINEER], 
-        version: formatVersion(config[CONSTANTS.CONFIG_KEYS.VERSION]) 
+        version: config[CONSTANTS.CONFIG_KEYS.VERSION] // Usa o valor diretamente da config
     };
     const headers = { 
         h1: getColumnHeader(config[CONSTANTS.CONFIG_KEYS.COL_1]), 
@@ -691,9 +719,16 @@ function createAndFormatReport(sheet, combination, kojoSuffix, data) {
         h4: getColumnHeader(config[CONSTANTS.CONFIG_KEYS.COL_4]), 
         h5: 'QTY' 
     };
+
     const headerValues = createHeaderData(reportConfig, kojoSuffix);
-    sheet.getRange(1, 1, headerValues.length, 2).setValues(headerValues);
+    
+    // **INÍCIO DA SOLUÇÃO DEFINITIVA**
+    // Altera a ordem: primeiro formata as células do cabeçalho como texto,
+    // depois insere os valores. Isso garante que "01" seja mantido.
     formatHeader(sheet, headerValues.length);
+    sheet.getRange(1, 1, headerValues.length, 2).setValues(headerValues);
+    // **FIM DA SOLUÇÃO DEFINITIVA**
+
     const dataStartRow = headerValues.length + 2;
     const finalData = [[headers.h1, headers.h2, headers.h3, headers.h4, headers.h5]].concat(data);
     sheet.getRange(dataStartRow, 1, finalData.length, 5).setValues(finalData);
