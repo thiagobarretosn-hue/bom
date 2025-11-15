@@ -1124,7 +1124,7 @@ function processarFixadoresSelecionados(selectedPipes) {
       linhaMat[6] = pipe.originalRow[6];
       linhaMat[7] = pipe.originalRow[7];
       linhaMat[8] = mat.desc;
-      linhaMat[9] = `=J${pipe.rowIndex + linhasParaInserir.length}*${mat.qtyFormula}`; // FÓRMULA
+      linhaMat[9] = `=J${pipe.rowIndex}*${mat.qtyFormula}`; // FÓRMULA
       
       linhasParaInserir.push(linhaMat);
     });
