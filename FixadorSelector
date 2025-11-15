@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8f9fa;
+      --card: #ffffff;
+      --primary: #1a73e8;
+      --success: #34a853;
+      --border: #e0e0e0;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      margin: 0;
+      padding: 16px;
+      font-size: 13px;
+    }
+    .header {
+      background: linear-gradient(135deg, var(--primary), #1557b0);
+      color: white;
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .header h2 { margin: 0; font-size: 18px; }
+    .controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-success { background: var(--success); color: white; }
+    .btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    
+    .pipe-list {
+      max-height: 500px;
+      overflow-y: auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .pipe-item {
+      display: grid;
+      grid-template-columns: 30px 1fr;
+      gap: 12px;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      align-items: start;
+      transition: background 0.2s;
+    }
+    .pipe-item:hover { background: #f8f9fa; }
+    .pipe-item:last-child { border-bottom: none; }
+    
+    .pipe-checkbox { 
+      margin-top: 4px;
+      transform: scale(1.2);
+      cursor: pointer;
+    }
+    .pipe-info { display: flex; flex-direction: column; gap: 4px; }
+    .pipe-desc { font-weight: 600; color: #202124; }
+    .pipe-meta { 
+      display: flex; 
+      gap: 12px; 
+      font-size: 11px; 
+      color: #5f6368;
+      flex-wrap: wrap;
+    }
+    .meta-item { 
+      background: #e8f0fe; 
+      padding: 2px 8px; 
+      border-radius: 4px; 
+    }
+    
+    .summary {
+      position: sticky;
+      bottom: 0;
+      background: var(--card);
+      padding: 12px;
+      border-top: 2px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+    }
+    .status {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 6px;
+      text-align: center;
+      font-size: 12px;
+      display: none;
+    }
+    .status.success { background: #d4edda; color: #155724; }
+    .status.error { background: #f8d7da; color: #721c24; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>🔧 Seleção de Tubos para Fixadores</h2>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-primary" onclick="toggleAll(true)">✅ Selecionar Todos</button>
+    <button class="btn btn-primary" onclick="toggleAll(false)">❌ Limpar Seleção</button>
+  </div>
+
+  <div class="pipe-list" id="pipeList"></div>
+
+  <div class="summary">
+    <span id="counter">0 tubos selecionados</span>
+    <button class="btn btn-success" id="btnConfirm" onclick="confirmarFixadores()" disabled>
+      Inserir Fixadores
+    </button>
+  </div>
+
+  <div id="status" class="status"></div>
+
+  <script>
+    let pipesData = [];
+
+    function renderPipes(pipes) {
+      pipesData = pipes;
+      const container = document.getElementById('pipeList');
+      
+      if (!pipes || pipes.length === 0) {
+        container.innerHTML = '<div style="padding:40px;text-align:center;color:#999">Nenhum tubo elegível encontrado</div>';
+        return;
+      }
+
+      container.innerHTML = pipes.map((pipe, idx) => `
+        <div class="pipe-item">
+          <input type="checkbox" class="pipe-checkbox" id="pipe_${idx}" onchange="updateCounter()">
+          <label for="pipe_${idx}" class="pipe-info">
+            <div class="pipe-desc">${pipe.desc}</div>
+            <div class="pipe-meta">
+              <span class="meta-item">📍 ${pipe.section}</span>
+              <span class="meta-item">🏗️ ${pipe.trade}</span>
+              <span class="meta-item">📐 ${pipe.phase}</span>
+              <span class="meta-item">🏢 ${pipe.unitid}</span>
+              ${pipe.diameter ? `<span class="meta-item">🧿 ⌀ ${pipe.diameter}"</span>` : ''}
+              <span class="meta-item">📏 ${pipe.qty} ${pipe.uom}</span>
+              
+             
+            </div>
+          </label>
+        </div>
+      `).join('');
+    }
+
+    function toggleAll(checked) {
+      document.querySelectorAll('.pipe-checkbox').forEach(cb => cb.checked = checked);
+      updateCounter();
+    }
+
+    function updateCounter() {
+      const count = document.querySelectorAll('.pipe-checkbox:checked').length;
+      document.getElementById('counter').textContent = `${count} tubos selecionados`;
+      document.getElementById('btnConfirm').disabled = count === 0;
+    }
+
+    function confirmarFixadores() {
+      const selected = [];
+      document.querySelectorAll('.pipe-checkbox:checked').forEach(cb => {
+        const idx = parseInt(cb.id.split('_')[1]);
+        selected.push(pipesData[idx]);
+      });
+
+      if (selected.length === 0) return;
+
+      showStatus('Processando fixadores...', 'info');
+      document.getElementById('btnConfirm').disabled = true;
+
+      google.script.run
+        .withSuccessHandler(result => {
+          if (result.success) {
+            showStatus(`✅ ${result.added} linhas inseridas!`, 'success');
+            setTimeout(() => google.script.host.close(), 2000);
+          } else {
+            showStatus(`❌ ${result.message}`, 'error');
+            document.getElementById('btnConfirm').disabled = false;
+          }
+        })
+        .withFailureHandler(err => {
+          showStatus(`❌ Erro: ${err.message}`, 'error');
+          document.getElementById('btnConfirm').disabled = false;
+        })
+        .processarFixadoresSelecionados(selected);
+    }
+
+    function showStatus(msg, type) {
+      const status = document.getElementById('status');
+      status.textContent = msg;
+      status.className = `status ${type}`;
+      status.style.display = 'block';
+    }
+
+    window.addEventListener('load', () => {
+      google.script.run
+        .withSuccessHandler(renderPipes)
+        .withFailureHandler(err => showStatus(`Erro ao carregar: ${err.message}`, 'error'))
+        .getPipesElegiveis();
+    });
+  </script>
+</body>
+</html>
