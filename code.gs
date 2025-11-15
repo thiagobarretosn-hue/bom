@@ -2,11 +2,12 @@
  * @OnlyCurrentDoc
  * SCRIPT DE AUTOMAÇÃO DE RELATÓRIOS DINÂMICOS - VERSÃO COM PAINEL UNIFICADO
  *
- * REVISÃO 32.1 (CLASSIFICAÇÃO AVANÇADA):
- * - DROPDOWN DE CLASSIFICAÇÃO MELHORADO: O campo "CLASSIFICAR POR" agora lista todas as colunas
- * da aba de origem, oferecendo total flexibilidade na ordenação dos dados.
- * - LÓGICA DE PROCESSAMENTO REESTRUTURADA: O motor de processamento foi ajustado para
- * suportar a classificação por qualquer coluna, mesmo que ela não faça parte do relatório final.
+ * REVISÃO 32.0 (CLASSIFICAÇÃO DINÂMICA):
+ * - NOVA FUNCIONALIDADE: Adicionada uma nova secção 'OPÇÕES DE RELATÓRIO' na aba 'Config'.
+ * - CONTROLO DE CLASSIFICAÇÃO: O utilizador pode agora escolher dinamicamente a coluna
+ * e a ordem (Ascendente/Descendente) para a classificação dos dados nos relatórios gerados.
+ * - INTEGRAÇÃO SEGURA: A lógica de classificação foi centralizada e atualizada para não
+ * afetar outras funcionalidades do script.
  */
 
 // =================================================================
@@ -34,6 +35,7 @@ const CONSTANTS = {
     DRIVE_FOLDER_ID: 'Pasta Drive ID',
     DRIVE_FOLDER_NAME: 'Pasta Nome',
     PDF_PREFIX: 'PDF Prefixo',
+    // NOVO: Chaves para a configuração de classificação
     SORT_BY: 'CLASSIFICAR POR',
     SORT_ORDER: 'ORDEM',
   },
@@ -54,11 +56,12 @@ const CONSTANTS = {
     PANEL_EMPTY_BG: '#95a5a6',
     PANEL_ERROR_BG: '#c0392b'
   },
-  CACHE_EXPIRATION_SECONDS: 180,
-  COMBINATION_DELIMITER: '|||',
+  CACHE_EXPIRATION_SECONDS: 180, // Cache expira em 3 minutos
+  COMBINATION_DELIMITER: '|||', // Delimitador para evitar conflito com dados que contenham "."
 };
 
 
+// ============= ADICIONAR AO MENU onOpen() =============
 function onOpen() {
   try {
     SpreadsheetApp.getUi()
@@ -66,6 +69,8 @@ function onOpen() {
       .addItem('⚙️ Painel de Controle', 'openConfigSidebar')
       .addSeparator()
       .addItem('📊 Processar Dados', 'runProcessingWithFeedback')
+      .addItem('🔧 Fixadores → Fonte', 'abrirSeletorFixadores')  // NOVO
+      .addItem('🔧 Fixadores → Relatórios', 'calcularFixadoresRelatoriosComFeedback')  // NOVO
       .addItem('📄 Exportar Todos PDFs', 'exportAllPDFsWithFeedback')
       .addSeparator()
       .addItem('🗑️ Limpar Relatórios Antigos', 'clearOldReports')
@@ -79,7 +84,6 @@ function onOpen() {
     console.error('Erro na inicialização:', error);
   }
 }
-
 function openConfigSidebar() {
   try {
     const html = HtmlService.createHtmlOutputFromFile(CONSTANTS.UI.SIDEBAR_FILE)
@@ -106,6 +110,7 @@ function getAllConfigValues() {
 
     const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONSTANTS.SHEETS.CONFIG);
     if (!configSheet) return {};
+    // Usa getDisplayValues() para garantir que a formatação (ex: "01") seja lida como texto.
     const values = configSheet.getRange("A1:B" + configSheet.getLastRow()).getDisplayValues();
     const config = {};
     values.forEach(row => {
@@ -171,6 +176,7 @@ function ensureConfigExists() {
   }
 }
 
+// ALTERADO: Adicionada nova secção para classificação
 function forceCreateConfig() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetName = CONSTANTS.SHEETS.CONFIG;
@@ -205,9 +211,9 @@ function forceCreateConfig() {
     [CONSTANTS.CONFIG_KEYS.ENGINEER, 'WANDERSON', 'Nome do engenheiro responsável.'],
     [CONSTANTS.CONFIG_KEYS.VERSION, '', 'Versão do relatório (ex: 01, 02, 03...).'],
     ['', '', ''],
-    [' ⚙️ OPÇÕES DE RELATÓRIO', '', 'Defina opções adicionais para a geração dos relatórios.'],
-    [CONSTANTS.CONFIG_KEYS.SORT_BY, 'I - DESC', 'Coluna a ser usada para classificar os itens no relatório.'],
-    [CONSTANTS.CONFIG_KEYS.SORT_ORDER, 'Ascendente (A-Z, 0-9)', 'A ordem de classificação (ascendente ou descendente).'],
+    [' ⚙️ OPÇÕES DE RELATÓRIO', '', 'Defina opções adicionais para a geração dos relatórios.'], // NOVO
+    [CONSTANTS.CONFIG_KEYS.SORT_BY, 'Coluna 2', 'Coluna a ser usada para classificar os itens no relatório.'], // NOVO
+    [CONSTANTS.CONFIG_KEYS.SORT_ORDER, 'Ascendente (A-Z, 0-9)', 'A ordem de classificação (ascendente ou descendente).'], // NOVO
     ['', '', ''],
     [' 💾 SALVAMENTO', '', 'Configurações para exportação e salvamento dos arquivos.'],
     [CONSTANTS.CONFIG_KEYS.DRIVE_FOLDER_ID, '', 'Cole o LINK COMPLETO da pasta ou apenas o ID.'],
@@ -220,6 +226,7 @@ function forceCreateConfig() {
   configSheet.setColumnWidth(1, 220).setColumnWidth(2, 300).setColumnWidth(3, 350);
   configSheet.getRange('A1:C1').merge().setValue('⚙️ PAINEL DE CONFIGURAÇÃO | RELATÓRIOS DINÂMICOS').setBackground(styles.HEADER_BG).setFontColor(styles.FONT_LIGHT).setFontSize(14).setFontWeight('bold').setHorizontalAlignment('center');
   
+  // ALTERADO: Atualizados os números das linhas para incluir a nova secção
   const sections = { 3: { endRow: 7 }, 9: { endRow: 14 }, 16: { endRow: 21 }, 23: { endRow: 26 }, 28: { endRow: 31 } };
 
   for (const startRow in sections) {
@@ -234,7 +241,7 @@ function forceCreateConfig() {
     }
     configSheet.getRange(start, 1, s.endRow - start + 1, 3).setBorder(true, true, true, true, null, null, styles.BORDER, SpreadsheetApp.BorderStyle.SOLID);
   }
-  configSheet.getRange(21, 2).setNumberFormat('@STRING@');
+  configSheet.getRange(21, 2).setNumberFormat('@STRING@'); // Linha da Versão
   configSheet.setFrozenRows(1);
   
   configSheet.getRange('E1:M1').merge().setValue('PAINEL UNIFICADO DE AGRUPAMENTO E PRÉ-VISUALIZAÇÃO')
@@ -247,13 +254,14 @@ function forceCreateConfig() {
   updateConfigDropdownsAuto();
 }
 
-// ALTERADO: Dropdown de "CLASSIFICAR POR" agora usa a lista completa de colunas.
+// ALTERADO: Adicionados dropdowns para as novas opções de classificação
 function updateConfigDropdownsAuto() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const configSheet = ss.getSheetByName(CONSTANTS.SHEETS.CONFIG);
   if (!configSheet) return;
   const config = getAllConfigValues();
 
+  // Dropdown para Aba Origem
   const sourceSheets = ss.getSheets().map(s => s.getName()).filter(n => n !== CONSTANTS.SHEETS.CONFIG);
   if (sourceSheets.length > 0) {
     configSheet.getRange('B4').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(sourceSheets, true).setAllowInvalid(false).build());
@@ -262,13 +270,22 @@ function updateConfigDropdownsAuto() {
   const sourceSheet = ss.getSheetByName(config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
   if (!sourceSheet || sourceSheet.getLastColumn() === 0) return;
   
+  // Dropdowns para Colunas
   const headers = sourceSheet.getRange(1, 1, 1, sourceSheet.getLastColumn()).getValues()[0];
   const columnOptions = headers.map((h, i) => `${String.fromCharCode(65 + i)} - ${h || `Coluna ${String.fromCharCode(65 + i)}`}`);
   const columnRule = SpreadsheetApp.newDataValidation().requireValueInList(columnOptions, true).setAllowInvalid(false).build();
   [5, 6, 7, 10, 11, 12, 13, 14].forEach(row => configSheet.getRange(row, 2).setDataValidation(columnRule));
 
-  // ALTERADO: Usa a regra de validação `columnRule` (com todas as colunas) para o campo de classificação.
-  configSheet.getRange(24, 2).setDataValidation(columnRule); // Célula B24 para 'CLASSIFICAR POR'
+  // NOVO: Dropdowns para as opções de classificação
+  const bomColumnOptions = [
+      CONSTANTS.CONFIG_KEYS.COL_1, 
+      CONSTANTS.CONFIG_KEYS.COL_2, 
+      CONSTANTS.CONFIG_KEYS.COL_3, 
+      CONSTANTS.CONFIG_KEYS.COL_4,
+      CONSTANTS.CONFIG_KEYS.COL_5
+  ];
+  const sortColumnRule = SpreadsheetApp.newDataValidation().requireValueInList(bomColumnOptions, true).setAllowInvalid(false).build();
+  configSheet.getRange(24, 2).setDataValidation(sortColumnRule); // Célula B24 para 'CLASSIFICAR POR'
 
   const sortOrderOptions = ['Ascendente (A-Z, 0-9)', 'Descendente (Z-A, 9-0)'];
   const sortOrderRule = SpreadsheetApp.newDataValidation().requireValueInList(sortOrderOptions, true).setAllowInvalid(false).build();
@@ -276,26 +293,33 @@ function updateConfigDropdownsAuto() {
 }
 
 
+/**
+ * ATUALIZADO: Lógica expandida para limpar o cache automaticamente quando a aba de origem é editada.
+ */
 function onEdit(e) {
     if (!e || !e.source) return;
     const sheet = e.source.getActiveSheet();
     const sheetName = sheet.getName();
     const range = e.range;
 
+    // Pega as configurações para saber qual é a aba de origem.
     const config = getAllConfigValues();
     const sourceSheetName = config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET];
     
+    // Cenário 1: A aba de origem de dados foi editada.
     if (sheetName === sourceSheetName) {
         clearSourceDataCache(config, sheet);
-        SpreadsheetApp.getActiveSpreadsheet().toast('Fonte de dados modificada. Cache atualizado.', 'Informação', 3);
-        return;
+        
+        return; // Sai após limpar o cache.
     }
 
+    // Cenário 2: A aba 'Config' foi editada.
     if (sheetName === CONSTANTS.SHEETS.CONFIG) {
         CacheService.getScriptCache().remove('all_config_values');
         const col = range.getColumn();
         const row = range.getRow();
 
+        // Formata a versão automaticamente ao ser editada (célula B21).
         if (col === 2 && row === 21) {
             const currentValue = range.getValue();
             const formattedValue = formatVersion(currentValue);
@@ -304,6 +328,7 @@ function onEdit(e) {
             }
         }
 
+        // Se a configuração de agrupamento ou aba de origem for alterada
         if (col === 2 && row >= 4 && row <= 7) {
             Utilities.sleep(200);
             const updatedConfig = getAllConfigValues();
@@ -311,27 +336,28 @@ function onEdit(e) {
             const sourceSheet = ss.getSheetByName(updatedConfig[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
 
             switch (row) {
-                case 4:
+                case 4: // Aba Origem mudou: redesenha tudo
                     SpreadsheetApp.getActiveSpreadsheet().toast('Aba de origem alterada, recriando painel...', 'Aguarde', 3);
                     updateConfigDropdownsAuto();
                     updateGroupingPanel();
                     break;
-                case 5:
+                case 5: // Nível 1 mudou
                     SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando Nível 1...', 'Aguarde', 2);
                     updateSingleLevelPanel(1, updatedConfig, sourceSheet);
                     break;
-                case 6:
+                case 6: // Nível 2 mudou
                     SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando Nível 2...', 'Aguarde', 2);
                     updateSingleLevelPanel(2, updatedConfig, sourceSheet);
                     break;
-                case 7:
+                case 7: // Nível 3 mudou
                     SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando Nível 3...', 'Aguarde', 2);
                     updateSingleLevelPanel(3, updatedConfig, sourceSheet);
                     break;
             }
-            updatePreviewPanel(11);
+            updatePreviewPanel(11); // A pré-visualização sempre atualiza
         }
 
+        // Se uma checkbox no painel for clicada, atualiza apenas a pré-visualização
         if ((col === 6 || col === 8 || col === 10) && row >= 4 && range.getWidth() === 1 && range.getDataValidation() && range.getDataValidation().getCriteriaType() === SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
             SpreadsheetApp.getActiveSpreadsheet().toast('Atualizando combinações...', 'Aguarde', 2);
             updatePreviewPanel(11);
@@ -340,6 +366,12 @@ function onEdit(e) {
 }
 
 
+/**
+ * Limpa o cache relacionado aos dados da aba de origem.
+ * Chamado automaticamente quando a aba de origem é editada.
+ * @param {Object} config O objeto de configuração atual.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sourceSheet A instância da aba de origem.
+ */
 function clearSourceDataCache(config, sourceSheet) {
     const cache = CacheService.getScriptCache();
     cache.remove('all_config_values');
@@ -449,7 +481,7 @@ function getPanelSelections(sheet) {
 function updatePreviewPanel(previewStartCol) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const configSheet = ss.getSheetByName(CONSTANTS.SHEETS.CONFIG);
-  const internalDataCol = previewStartCol + 3;
+  const internalDataCol = previewStartCol + 3; // Coluna N para dados internos
 
   const combinations = getSelectedCombinationsFromPanel();
   const existingSuffixes = new Map();
@@ -460,7 +492,7 @@ function updatePreviewPanel(previewStartCol) {
           if (row[0]) existingSuffixes.set(row[0], row[2]);
       });
   }
-  configSheet.getRange(3, previewStartCol, configSheet.getMaxRows() - 2, 4).clear();
+  configSheet.getRange(3, previewStartCol, configSheet.getMaxRows() - 2, 4).clear(); // Limpa 4 colunas
 
   configSheet.getRange(3, previewStartCol, 1, 3).setValues([['COMBINAÇÃO GERADA', 'CRIAR?', 'SUFIXO KOJO FINAL']]).setBackground(CONSTANTS.COLORS.HEADER_BG).setFontColor(CONSTANTS.COLORS.FONT_LIGHT).setFontWeight('bold');
   
@@ -468,15 +500,15 @@ function updatePreviewPanel(previewStartCol) {
     const tableData = combinations.map(combo => {
       const displayCombo = combo.replace(/\|\|\|/g, '.');
       const kojoSuffix = existingSuffixes.get(combo) || displayCombo;
-      return [displayCombo, true, kojoSuffix, combo];
+      return [displayCombo, true, kojoSuffix, combo]; // Adiciona o combo original na 4ª coluna
     });
-    configSheet.getRange(4, previewStartCol, tableData.length, 4).setValues(tableData);
+    configSheet.getRange(4, previewStartCol, tableData.length, 4).setValues(tableData); // Escreve 4 colunas
     configSheet.getRange(4, previewStartCol + 1, tableData.length, 1).insertCheckboxes();
     configSheet.getRange(4, previewStartCol + 2, tableData.length, 1).setBackground(CONSTANTS.COLORS.INPUT_BG);
   }
   
   configSheet.setColumnWidth(previewStartCol, 250).setColumnWidth(previewStartCol + 1, 80).setColumnWidth(previewStartCol + 2, 250);
-  configSheet.hideColumns(internalDataCol);
+  configSheet.hideColumns(internalDataCol); // Oculta a coluna com os dados internos
 
   const lastCombinationRow = configSheet.getRange(configSheet.getMaxRows(), previewStartCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
   const effectiveLastRow = Math.max(3, lastCombinationRow);
@@ -562,7 +594,7 @@ function runProcessingWithFeedback() {
     }
 }
 
-// LÓGICA REESTRUTURADA: A função agora suporta classificação por qualquer coluna da aba de origem.
+// ALTERADO: Função principal de processamento agora lê as configurações de classificação
 function runProcessing() {
   CacheService.getScriptCache().remove('all_config_values');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -594,12 +626,17 @@ function runProcessing() {
       c5: getColumnIndex(config[CONSTANTS.CONFIG_KEYS.COL_5])
   };
 
-  // NOVO: Determina o índice da coluna de classificação a partir da string completa (ex: "I - DESC")
-  const sortColumnConfig = config[CONSTANTS.CONFIG_KEYS.SORT_BY] || 'I - DESC';
-  const sortColumnIndex = getColumnIndex(sortColumnConfig) - 1; // Índice de base 0 para uso em arrays
+  // NOVO: Lê as configurações de classificação da aba 'Config'
+  const sortColumnName = config[CONSTANTS.CONFIG_KEYS.SORT_BY];
   const sortOrder = config[CONSTANTS.CONFIG_KEYS.SORT_ORDER] === 'Descendente (Z-A, 9-0)' ? 'desc' : 'asc';
-  
-  if(sortColumnIndex < 0) return { success: false, message: `Coluna de classificação "${sortColumnConfig}" inválida.` };
+
+  const bomColumnNameToIndex = {
+      [CONSTANTS.CONFIG_KEYS.COL_1]: 0, [CONSTANTS.CONFIG_KEYS.COL_2]: 1, [CONSTANTS.CONFIG_KEYS.COL_3]: 2,
+      [CONSTANTS.CONFIG_KEYS.COL_4]: 3, [CONSTANTS.CONFIG_KEYS.COL_5]: 4,
+  };
+  const sortIndex = bomColumnNameToIndex[sortColumnName] ?? 1; // Se não encontrar, classifica pela Coluna 2 por padrão
+
+  const sortConfig = { sortIndex, sortOrder };
 
   const dataMap = new Map();
   combinationsToProcess.forEach(item => dataMap.set(item.combination, []));
@@ -612,11 +649,9 @@ function runProcessing() {
       }).join(CONSTANTS.COMBINATION_DELIMITER);
       
       if (dataMap.has(rowCombination)) {
-          // NOVO: Adiciona o valor da coluna de classificação como um 6º elemento "oculto"
           dataMap.get(rowCombination).push([  
               row[bomCols.c1 - 1], row[bomCols.c2 - 1], row[bomCols.c3 - 1], 
-              row[bomCols.c4 - 1], parseFloat(row[bomCols.c5 - 1]) || 0,
-              row[sortColumnIndex] // Valor para classificação
+              row[bomCols.c4 - 1], parseFloat(row[bomCols.c5 - 1]) || 0 
           ]);
       }
   }
@@ -627,7 +662,8 @@ function runProcessing() {
       const rawData = dataMap.get(combination);
       if (!rawData || rawData.length === 0) continue;
       
-      const processedData = groupAndSumData(rawData, sortOrder);
+      // ALTERADO: Passa a configuração de classificação para a função de processamento de dados
+      const processedData = groupAndSumData(rawData, sortConfig);
       
       const sanitizedName = displayCombination.toString().replace(/[\/\\\?\*\[\]:]/g, '_').substring(0, 100);
       let targetSheet = ss.getSheetByName(sanitizedName) || ss.insertSheet(sanitizedName);
@@ -640,31 +676,33 @@ function runProcessing() {
   return { success: true, created: createdCount };
 }
 
-// LÓGICA REESTRUTURADA: A função agora agrupa, ordena e depois remove a coluna de classificação.
-function groupAndSumData(data, sortOrder) {
+// ALTERADO: Esta função agora aceita uma configuração de classificação e a aplica
+function groupAndSumData(data, sortConfig) {
   const grouped = {};
   data.forEach(row => {
-    // A chave de agrupamento são as 4 primeiras colunas do relatório
-    const key = `${row[0]}|${row[1]}|${row[2]}|${row[3]}`; 
+    const key = `${row[0]}|${row[1]}|${row[2]}|${row[3]}`; // Chave de agrupamento baseada nas 4 primeiras colunas
     if (grouped[key]) {
       grouped[key][4] += row[4]; // Soma a 5ª coluna (quantidade)
     } else {
-      // Guarda a linha inteira na primeira vez, incluindo o 6º elemento (valor de classificação)
       grouped[key] = [...row];
     }
   });
 
   const groupedData = Object.values(grouped);
+
+  // NOVO: Lógica de classificação dinâmica
+  const { sortIndex, sortOrder } = sortConfig;
   const direction = sortOrder === 'asc' ? 1 : -1;
 
-  // Ordena os dados com base no 6º elemento (índice 5)
   groupedData.sort((a, b) => {
-    const valA = a[5];
-    const valB = b[5];
+    const valA = a[sortIndex];
+    const valB = b[sortIndex];
 
+    // Trata valores nulos ou vazios para que fiquem no final
     if (valA === null || valA === undefined || valA === '') return 1;
     if (valB === null || valB === undefined || valB === '') return -1;
 
+    // Tenta comparar como números primeiro, especialmente útil para a coluna de quantidade (QTY)
     const aIsNum = !isNaN(parseFloat(valA)) && isFinite(valA);
     const bIsNum = !isNaN(parseFloat(valB)) && isFinite(valB);
 
@@ -672,11 +710,11 @@ function groupAndSumData(data, sortOrder) {
       return (parseFloat(valA) - parseFloat(valB)) * direction;
     }
 
+    // Se não forem números, usa a comparação de texto inteligente (localeCompare)
     return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * direction;
   });
   
-  // NOVO: Remove o 6º elemento de cada linha antes de retornar, para que o relatório final tenha 5 colunas.
-  return groupedData.map(row => row.slice(0, 5));
+  return groupedData;
 }
 
 
@@ -882,10 +920,326 @@ function forceRefreshPanels() {
     SpreadsheetApp.getActiveSpreadsheet().toast('Painéis atualizados com os dados mais recentes!', 'Sucesso', 5);
 }
 
-function testSystem() {
-    const config = getAllConfigValues();
-    const combinations = getSelectedCombinationsFromPanel();
-    const message = `Diagnóstico do Sistema:\n- Modo de Agrupamento: Interativo (3 Níveis)\n- Combinações Selecionadas no Painel: ${combinations.length}\n- Aba de Origem: ${config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET] || "Não configurada"}\n\nO sistema está operando com a lógica de agrupamento mais recente e otimizações de cache.`;
-    SpreadsheetApp.getUi().alert('Diagnóstico', message, SpreadsheetApp.getUi().ButtonSet.OK);
-    return { "Modo de Agrupamento": "Interativo (3 Níveis)", "Combinações Selecionadas": combinations.length, "Aba de Origem": config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET] || "Não configurada" };
+// ============= CONFIGURAÇÃO DE FIXADORES ATUALIZADA =============
+const FIXADOR_CONFIG = {
+  RISER: {
+    interval: 10,
+    clamps: {
+      '1/2': 'RISER CLAMP 1 IN. METAL',
+      '3/4': 'RISER CLAMP 1 IN. METAL',
+      '1': 'RISER CLAMP 1 IN. METAL',
+      '1-1/4': 'RISER CLAMP 1-1/4 IN. METAL',
+      '1-1/2': 'RISER CLAMP 1-1/2 IN. METAL',
+      '2': 'RISER CLAMP 2 IN. METAL',
+      '2-1/2': 'RISER CLAMP 2 IN. METAL',
+      '3': 'RISER CLAMP 3 IN. METAL',
+      '4': 'RISER CLAMP 4 IN. METAL',
+      '6': 'RISER CLAMP 6 IN. METAL',
+      '8': 'RISER CLAMP 8 IN. METAL',
+      '10': 'RISER CLAMP 12 IN. METAL',
+      '12': 'RISER CLAMP 12 IN. METAL'
+    },
+    materials: [
+      { desc: 'NUT 3/8 IN. METAL', qtyFormula: 4 },
+      { desc: 'FENDER WASHER 3/8 X 1-1/2', qtyFormula: 4 },
+      { desc: 'ANCHOR DROP-IN 3/8 IN. X 3/4 IN. LONG HDI-P (W/ AUTO SET TOOL) [HILTI 409499]', qtyFormula: 2 },
+      { desc: 'PLTD STEEL ALL THREAD ROD 3/8 IN. X 6 FT.', qtyFormula: 2 }
+    ]
+  },
+  LOOP: {
+    interval: 3,
+    hangs: {
+      '1/2': 'LOOP HANG 1/2 IN. HANGER',
+      '3/4': 'LOOP HANG 3/4 IN. HANGER',
+      '1': 'LOOP HANG 1 IN. METAL',
+      '1-1/4': 'LOOP HANG 1-1/4 IN. METAL',
+      '1-1/2': 'LOOP HANG 1-1/2 IN. HANGER',
+      '2': 'LOOP HANG 2 IN. METAL',
+      '2-1/2': 'LOOP HANG 2-1/2 IN. METAL',
+      '3': 'LOOP HANG 3 IN. METAL',
+      '4': 'LOOP HANG 4 IN. METAL',
+      '6': 'LOOP HANG 6 IN. METAL',
+      '8': 'LOOP HANG 6 IN. METAL',
+      '10': 'LOOP HANG 12 IN. METAL',
+      '12': 'LOOP HANG 12 IN. METAL'
+    },
+    materials: [
+      { desc: 'NUT 3/8 IN. METAL', qtyFormula: 2 },
+      { desc: 'FENDER WASHER 3/8 X 1-1/2', qtyFormula: 2 },
+      { desc: 'ANCHOR DROP-IN 3/8 IN. X 3/4 IN. LONG HDI-P (W/ AUTO SET TOOL) [HILTI 409499]', qtyFormula: 1 },
+      { desc: 'PLTD STEEL ALL THREAD ROD 3/8 IN. X 6 FT.', qtyFormula: 1 }
+    ]
+  }
+};
+
+// ============= FUNÇÕES AUXILIARES =============
+function arredondarInteligente(value) {
+  if (value <= 0) return 0;
+  if (value < 1) return 1;
+  const base = Math.floor(value);
+  const decimal = value - base;
+  return decimal <= 0.3 ? base : base + 1;
+}
+
+function extrairDiametro(desc) {
+  const patterns = [
+    /PIPE\s+(\d+\/\d+)\s+IN/i,
+    /PIPE\s+(\d+)\s+IN/i,
+    /PIPE\s+(\d+-\d+\/\d+)\s+IN/i,
+    /(\d+\/\d+)\s*IN/i,
+    /(\d+-\d+\/\d+)\s*IN/i,
+    /(\d+)\s*IN/i
+  ];
+  
+  for (const pattern of patterns) {
+    const match = desc.match(pattern);
+    if (match) return normalizarDiametro(match[1]);
+  }
+  return null;
+}
+
+function normalizarDiametro(diam) {
+  const normalized = diam.replace(/\s+/g, '');
+  const mapping = {
+    '1/2': '1/2', '3/4': '3/4', '1': '1', '1-1/4': '1-1/4',
+    '1-1/2': '1-1/2', '2': '2', '2-1/2': '2-1/2', '3': '3',
+    '4': '4', '6': '6', '8': '8', '10': '10', '12': '12'
+  };
+  return mapping[normalized] || normalized;
+}
+
+function validarTipoFixacao(section) {
+  const sectionUpper = String(section).toUpperCase();
+  return sectionUpper.includes('RISER') || sectionUpper.includes('COLGANTE');
+}
+
+// ============= ABERTURA DO SELETOR =============
+function abrirSeletorFixadores() {
+  const html = HtmlService.createHtmlOutputFromFile('FixadorSelector')
+    .setWidth(600)
+    .setHeight(700)
+    .setTitle('Seletor de Fixadores');
+  
+  SpreadsheetApp.getUi().showModalDialog(html, 'Seleção de Tubos');
+}
+
+// ============= LEITURA DE PIPES ELEGÍVEIS =============
+function getPipesElegiveis() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const config = getAllConfigValues();
+  const sourceSheet = ss.getSheetByName(config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
+  
+  if (!sourceSheet) return [];
+  
+  const lastRow = sourceSheet.getLastRow();
+  if (lastRow < 2) return [];
+  
+  const data = sourceSheet.getRange(2, 1, lastRow - 1, sourceSheet.getLastColumn()).getValues();
+  const pipes = [];
+  
+  data.forEach((row, idx) => {
+    const section = String(row[1] || '');
+    const desc = String(row[8] || '');
+    const qty = parseFloat(row[9]) || 0;
+    const uom = String(row[10] || '');
+    
+    if (validarTipoFixacao(section) && desc.toUpperCase().includes('PIPE') && qty > 0) {
+      const diameter = extrairDiametro(desc);
+      const isRiser = section.toUpperCase().includes('RISER');
+      const config = isRiser ? FIXADOR_CONFIG.RISER : FIXADOR_CONFIG.LOOP;
+      const itemMap = isRiser ? config.clamps : config.hangs;
+      
+      if (diameter && itemMap[diameter]) {
+        pipes.push({
+          rowIndex: idx + 2,
+          section: row[1],
+          local: row[4],
+          trade: row[5],
+          phase: row[7],
+          unitid : row[3],
+          desc: desc,
+          qty: qty,
+          uom: uom,
+          diameter: diameter,
+          isRiser: isRiser,
+          originalRow: [...row]
+        });
+      }
+    }
+  });
+  
+  return pipes;
+}
+
+// ============= PROCESSAMENTO DE FIXADORES SELECIONADOS =============
+function processarFixadoresSelecionados(selectedPipes) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const config = getAllConfigValues();
+  const sourceSheet = ss.getSheetByName(config[CONSTANTS.CONFIG_KEYS.SOURCE_SHEET]);
+  
+  if (!sourceSheet || !selectedPipes || selectedPipes.length === 0) {
+    return { success: false, message: 'Dados inválidos' };
+  }
+  
+  // Ordenar por rowIndex DESC para inserir de baixo para cima (evita deslocamento)
+  selectedPipes.sort((a, b) => b.rowIndex - a.rowIndex);
+  
+  let totalAdded = 0;
+  const maxCol = sourceSheet.getLastColumn();
+  
+  selectedPipes.forEach(pipe => {
+    const fixadorConfig = pipe.isRiser ? FIXADOR_CONFIG.RISER : FIXADOR_CONFIG.LOOP;
+    const itemMap = pipe.isRiser ? fixadorConfig.clamps : fixadorConfig.hangs;
+    const fixadorItem = itemMap[pipe.diameter];
+    
+    if (!fixadorItem) return;
+    
+    const qtyFixadores = arredondarInteligente(pipe.qty / fixadorConfig.interval);
+    const linhasParaInserir = [];
+    
+    // Linha do fixador
+    const linhaFixador = new Array(maxCol).fill('');
+    linhaFixador[0] = pipe.originalRow[0]; // PROJECT
+    linhaFixador[1] = pipe.originalRow[1]; // SECTION
+    linhaFixador[2] = pipe.originalRow[2]; // QTT
+    linhaFixador[3] = pipe.originalRow[3]; // UNIT ID
+    linhaFixador[4] = pipe.originalRow[4]; // LOCAL
+    linhaFixador[5] = 'FIX'; // TRADE
+    linhaFixador[6] = pipe.originalRow[6]; // (vazia normalmente)
+    linhaFixador[7] = pipe.originalRow[7]; // PHASE
+    linhaFixador[8] = fixadorItem; // DESC
+    linhaFixador[9] = `=ROUND(J${pipe.rowIndex}/${fixadorConfig.interval})`; // FÓRMULA QTY
+    
+    linhasParaInserir.push(linhaFixador);
+    
+    // Linhas dos materiais
+    fixadorConfig.materials.forEach(mat => {
+      const linhaMat = new Array(maxCol).fill('');
+      linhaMat[0] = pipe.originalRow[0];
+      linhaMat[1] = pipe.originalRow[1];
+      linhaMat[2] = pipe.originalRow[2];
+      linhaMat[3] = pipe.originalRow[3];
+      linhaMat[4] = pipe.originalRow[4];
+      linhaMat[5] = 'FIX';
+      linhaMat[6] = pipe.originalRow[6];
+      linhaMat[7] = pipe.originalRow[7];
+      linhaMat[8] = mat.desc;
+      linhaMat[9] = `=J${pipe.rowIndex + linhasParaInserir.length}*${mat.qtyFormula}`; // FÓRMULA
+      
+      linhasParaInserir.push(linhaMat);
+    });
+    
+    // Inserir abaixo do pipe
+    const insertRow = pipe.rowIndex + 1;
+    sourceSheet.insertRowsAfter(pipe.rowIndex, linhasParaInserir.length);
+    
+    // Copiar formatação
+    const formatoOrigem = sourceSheet.getRange(pipe.rowIndex, 1, 1, maxCol);
+    formatoOrigem.copyFormatToRange(sourceSheet, 1, maxCol, insertRow, insertRow + linhasParaInserir.length - 1);
+    
+    // Inserir dados
+    const rangeDestino = sourceSheet.getRange(insertRow, 1, linhasParaInserir.length, maxCol);
+    
+    rangeDestino.setValues(linhasParaInserir);
+    
+    totalAdded += linhasParaInserir.length;
+  });
+  
+  return { success: true, added: totalAdded };
+}
+
+// ============= VERSÃO PARA RELATÓRIOS =============
+function calcularFixadoresRelatorios() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const reportSheets = getReportSheetNames();
+  
+  if (reportSheets.length === 0) {
+    return { success: false, message: 'Nenhum relatório encontrado' };
+  }
+  
+  let totalProcessed = 0;
+  
+  reportSheets.forEach(sheetName => {
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    
+    const result = processarFixadoresSheet(sheet);
+    totalProcessed += result.added;
+  });
+  
+  return { success: true, processed: totalProcessed, sheets: reportSheets.length };
+}
+
+function processarFixadoresSheet(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 8) return { added: 0 }; // Pula se só tem cabeçalho
+  
+  const dataStartRow = 8; // Após cabeçalho fixo de 6 linhas + 1 vazia + linha de headers
+  const data = sheet.getRange(dataStartRow, 1, lastRow - dataStartRow + 1, 5).getValues();
+  const linhasParaInserir = [];
+  
+  data.forEach((row, idx) => {
+    const desc = String(row[1] || '');
+    const qty = parseFloat(row[4]) || 0;
+    
+    if (desc.toUpperCase().includes('PIPE') && qty > 0) {
+      const diameter = extrairDiametro(desc);
+      if (!diameter) return;
+      
+      // Assume LOOP por padrão em relatórios (ajustar se necessário)
+      const config = FIXADOR_CONFIG.LOOP;
+      const fixadorItem = config.hangs[diameter];
+      
+      if (!fixadorItem) return;
+      
+      const actualRow = dataStartRow + idx;
+      const qtyFixadores = arredondarInteligente(qty / config.interval);
+      
+      // Fixador
+      linhasParaInserir.push([
+        row[0], // ID
+        fixadorItem,
+        row[2], // UPC
+        row[3], // UOM
+        `=ARREDONDAR.PARA.CIMA(E${actualRow}/${config.interval};0)`
+      ]);
+      
+      // Materiais
+      config.materials.forEach(mat => {
+        linhasParaInserir.push([
+          '',
+          mat.desc,
+          '',
+          'EA',
+          `=E${dataStartRow + linhasParaInserir.length - 1}*${mat.qtyFormula}`
+        ]);
+      });
+    }
+  });
+  
+  if (linhasParaInserir.length > 0) {
+    const insertRow = lastRow + 1;
+    sheet.getRange(insertRow, 1, linhasParaInserir.length, 5).setValues(linhasParaInserir);
+    
+    // Aplica formatação de banding
+    sheet.getRange(insertRow, 1, linhasParaInserir.length, 5)
+      .applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
+  }
+  
+  return { added: linhasParaInserir.length };
+}
+
+function calcularFixadoresRelatoriosComFeedback() {
+  SpreadsheetApp.getActiveSpreadsheet().toast('Calculando fixadores em relatórios...', 'Aguarde', -1);
+  const result = calcularFixadoresRelatorios();
+  
+  if (result.success) {
+    SpreadsheetApp.getActiveSpreadsheet().toast(
+      `✅ ${result.processed} linhas adicionadas em ${result.sheets} relatórios!`,
+      'Sucesso',
+      5
+    );
+  } else {
+    SpreadsheetApp.getUi().alert('Erro', result.message, SpreadsheetApp.getUi().ButtonSet.OK);
+  }
 }
