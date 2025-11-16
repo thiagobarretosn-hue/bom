@@ -1,15 +1,15 @@
 /**
  * @OnlyCurrentDoc
  * SISTEMA UNIFICADO DE RELATÓRIOS DINÂMICOS + FIXADORES
- * Versão 2.3 - Correção de Fixadores e Sidebar
+ * Versão 2.5 - Adicionada Função de REMOVER Fixadores
  *
- * CORREÇÕES:
- * 1. (FIXADORES) `getPipesElegiveis` agora deteta tubos processados (Trade 'FIX' 
- * na linha seguinte) e envia a propriedade 'jaTemFixador' para o HTML.
- * 2. (UX) `abrirSeletorFixadores` agora usa `showSidebar` (não-modal) em vez 
- * de `showModalDialog` (modal).
+ * NOVAS FUNCIONALIDADES:
+ * 1. (FIXADORES) Nova função `removerFixadoresSelecionados` no backend.
+ * 2. Esta função recebe os tubos processados, encontra as linhas 'FIX' 
+ * abaixo deles e as apaga em ordem inversa (para segurança).
  * 3. (BOM) Mantém todas as correções anteriores (Classificação Avançada, 
  * colunas J-DESC, O-PROJECT, etc.).
+ * 4. (UX) Mantém o `showModelessDialog` (não-modal) que você gostou.
  */
 
 // ============================================================================
@@ -893,24 +893,19 @@ function clearOldReports() {
 // ============================================================================
 
 /**
- * *** CORRIGIDO: Esta função agora usa showSidebar (não-modal) ***
- */
-/**
- * *** VERSÃO 2.4: Esta função agora usa showModelessDialog (não-modal) ***
- * Ela abre um pop-up flutuante que não trava a planilha.
+ * Abre um pop-up flutuante (não-modal)
  */
 function abrirSeletorFixadores() {
   const html = HtmlService.createHtmlOutputFromFile('FixadoresSidebar')
     .setTitle('Seletor de Fixadores')
-    .setWidth(900)  // Definimos a largura
-    .setHeight(800); // Definimos a altura
+    .setWidth(900)
+    .setHeight(800);
   
-  // MUDANÇA: De "showSidebar" para "showModelessDialog"
   SpreadsheetApp.getUi().showModelessDialog(html, 'Seletor de Fixadores');
 }
 
 /**
- * *** CORRIGIDO: Esta função agora deteta tubos processados ***
+ * Deteta tubos processados (propriedade 'jaTemFixador')
  */
 function getPipesElegiveis() {
   const config = ConfigService.getAll();
@@ -939,17 +934,16 @@ function getPipesElegiveis() {
       
       if (diameter && itemMap[diameter]) {
         
-        // --- INÍCIO DA CORREÇÃO ---
-        // Verifica se o tubo já foi processado olhando para a próxima linha
+        // --- Detecção de Fixador ---
         let jaTemFixador = false;
-        if (idx + 1 < data.length) { // Verifica se existe uma próxima linha
+        if (idx + 1 < data.length) { 
           const nextRow = data[idx + 1];
           const nextRowTrade = String(nextRow[6] || '').toUpperCase(); // Col G (TRADE)
           if (nextRowTrade === 'FIX') {
             jaTemFixador = true;
           }
         }
-        // --- FIM DA CORREÇÃO ---
+        // --- Fim da Detecção ---
 
         pipes.push({
           rowIndex: idx + 2,
@@ -966,7 +960,7 @@ function getPipesElegiveis() {
           diameter: diameter,
           isRiser: isRiser,
           originalRow: [...row],
-          jaTemFixador: jaTemFixador // <-- Propriedade ADICIONADA
+          jaTemFixador: jaTemFixador // <-- Propriedade essencial
         });
       }
     }
@@ -1088,6 +1082,61 @@ function processarFixadoresSelecionados(selectedPipes) {
   
   return { success: true, added: totalAdded };
 }
+
+/**
+ * *** NOVA FUNÇÃO (V 2.5) ***
+ * Remove as linhas de fixadores associadas a um tubo.
+ */
+function removerFixadoresSelecionados(selectedPipes) {
+  const config = ConfigService.getAll();
+  const sourceSheet = SpreadsheetApp.getActiveSpreadsheet()
+    .getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
+  
+  if (!sourceSheet || !selectedPipes || selectedPipes.length === 0) {
+    return { success: false, message: 'Dados inválidos' };
+  }
+
+  // CRÍTICO: Ordenar por rowIndex DECRESCENTE para apagar de baixo para cima
+  selectedPipes.sort((a, b) => b.rowIndex - a.rowIndex);
+  
+  let totalRemoved = 0;
+  const allData = sourceSheet.getDataRange().getValues(); // Ler a folha toda 1 vez
+  const tradeColIndex = 6; // Coluna G é o índice 6 (base 0)
+
+  try {
+    selectedPipes.forEach(pipe => {
+      const rowIndex = pipe.rowIndex; // Esta é a linha do TUBO (base 1)
+      let rowsToDelete = 0;
+      
+      // Começa a verificar a partir da linha *abaixo* do tubo
+      // allData é base 0, então a linha *abaixo* (rowIndex + 1) está em allData[rowIndex]
+      for (let i = rowIndex; i < allData.length; i++) {
+        const rowData = allData[i];
+        const trade = String(rowData[tradeColIndex] || '').toUpperCase();
+        
+        if (trade === 'FIX') {
+          rowsToDelete++;
+        } else {
+          // Encontrou uma linha que não é 'FIX', para de contar
+          break;
+        }
+      }
+      
+      if (rowsToDelete > 0) {
+        // Apaga as linhas. A primeira linha a apagar é rowIndex + 1
+        sourceSheet.deleteRows(rowIndex + 1, rowsToDelete);
+        totalRemoved += rowsToDelete;
+      }
+    });
+    
+    return { success: true, removed: totalRemoved };
+
+  } catch (e) {
+    Logger.log(`Erro ao remover fixadores: ${e.message}`);
+    return { success: false, message: `Erro ao apagar linhas: ${e.message}` };
+  }
+}
+
 
 // ============================================================================
 // EXPORTAÇÃO PDF
@@ -1305,7 +1354,7 @@ function testSystem() {
       .getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
     
     const msg = [
-      `Versão do Script: 2.3 (Sidebar Fixadores)`,
+      `Versão do Script: 2.5 (Remoção Fixadores)`,
       `Aba de Origem: ${config[CONFIG.KEYS.SOURCE_SHEET] || 'Não configurada'}`,
       `Linhas na Origem: ${sourceSheet ? sourceSheet.getLastRow() - 1 : 0}`,
       `Relatórios Gerados: ${getReportSheetNames().length}`,
