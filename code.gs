@@ -1,39 +1,17 @@
 /**
  * @OnlyCurrentDoc
- * SISTEMA UNIFICADO - RELATÓRIOS DINÂMICOS + FIXADORES
- * Versão 3.0 - Mapeamento Atualizado
+ * SISTEMA UNIFICADO DE RELATÓRIOS DINÂMICOS + FIXADORES
+ * Versão 2.1 - Corrigida e Otimizada
  */
-
-// ============================================================================
-// MAPEAMENTO DE COLUNAS ATUALIZADO
-// ============================================================================
-
-const COLUMN_MAPPING = {
-  SOURCE: {
-    PROJECT_NAME: 0,  // A - PROJECT NAME
-    SECTION: 1,       // B - SECTION
-    QTT: 2,           // C - QTT
-    UNIT_ID: 3,       // D - UNIT ID
-    UNIT_TYPE: 4,     // E - UNIT TYPE
-    LOCAL: 5,         // F - LOCAL
-    TRADE: 6,         // G - TRADE
-    PHASE: 7,         // H - PHASE
-    FLOOR: 8,         // I - FLOOR
-    DESC: 9,          // J - DESC
-    QTY: 10,          // K - QTY
-    UOM: 11,          // L - UOM
-    UPC: 12,          // M - UPC
-    UNIT_COST: 13,    // N - UNIT COST
-    PROJECT: 14       // O - PROJECT
-  }
-};
 
 // ============================================================================
 // CONFIGURAÇÃO GLOBAL
 // ============================================================================
 
 const CONFIG = {
-  SHEETS: { CONFIG: 'Config' },
+  SHEETS: {
+    CONFIG: 'Config'
+  },
   KEYS: {
     SOURCE_SHEET: 'Aba Origem',
     GROUP_L1: 'Agrupar por Nível 1',
@@ -210,7 +188,10 @@ const CacheManager = {
   },
   
   invalidateAll: () => {
-    CacheManager._cache.removeAll(['all_config_values', 'unique_values']);
+    CacheManager._cache.removeAll([
+      'all_config_values',
+      'unique_values'
+    ]);
   }
 };
 
@@ -244,7 +225,7 @@ const ConfigService = {
 };
 
 // ============================================================================
-// CRIAÇÃO DA ABA CONFIG
+// CRIAÇÃO E ATUALIZAÇÃO DA ABA CONFIG
 // ============================================================================
 
 function ensureConfigExists() {
@@ -264,62 +245,100 @@ function forceCreateConfig() {
   const configData = [
     ['CONFIGURAÇÃO', 'VALOR', 'DESCRIÇÃO'],
     ['', '', ''],
-    [' 📊 AGRUPAMENTO', '', 'Defina as colunas para agrupar e os painéis serão atualizados automaticamente.'],
-    [CONFIG.KEYS.SOURCE_SHEET, '', 'Aba que contém todos os dados brutos.'],
-    [CONFIG.KEYS.GROUP_L1, '', 'Coluna principal de agrupamento (obrigatório).'],
-    [CONFIG.KEYS.GROUP_L2, '', 'Subnível de agrupamento (opcional).'],
-    [CONFIG.KEYS.GROUP_L3, '', 'Terceiro nível de agrupamento (opcional).'],
+    [' 📊 AGRUPAMENTO', '', 'Defina as colunas para agrupar'],
+    [CONFIG.KEYS.SOURCE_SHEET, '', 'Aba com dados brutos'],
+    [CONFIG.KEYS.GROUP_L1, '', 'Coluna principal de agrupamento'],
+    [CONFIG.KEYS.GROUP_L2, '', 'Segundo nível (opcional)'],
+    [CONFIG.KEYS.GROUP_L3, '', 'Terceiro nível (opcional)'],
     ['', '', ''],
-    [' 📋 DADOS BOMS', '', 'Mapeamento das colunas para a criação das listas de materiais (BOMs).'],
-    [CONFIG.KEYS.COL_1, '', 'Coluna para o ID principal ou identificador do item.'],
-    [CONFIG.KEYS.COL_2, 'J - DESC', 'Coluna para a descrição do item.'],
-    [CONFIG.KEYS.COL_3, 'M - UPC', 'Coluna para o código de barras ou UPC.'],
-    [CONFIG.KEYS.COL_4, 'L - UOM', 'Coluna para a unidade de medida (Unit of Measure).'],
-    [CONFIG.KEYS.COL_5, 'O - PROJECT', 'Coluna com a quantidade a ser somada.'],
+    [' 📋 DADOS BOMS', '', 'Mapeamento das colunas'],
+    [CONFIG.KEYS.COL_1, '', 'ID ou identificador'],
+    [CONFIG.KEYS.COL_2, 'I - DESC', 'Descrição do item'],
+    [CONFIG.KEYS.COL_3, 'L - UPC', 'Código de barras'],
+    [CONFIG.KEYS.COL_4, 'K - UOM', 'Unidade de medida'],
+    [CONFIG.KEYS.COL_5, 'N - PROJECT', 'Quantidade'],
     ['', '', ''],
-    [' 🏷️ CABEÇALHO', '', 'Informações que aparecerão no cabeçalho de cada relatório gerado.'],
-    [CONFIG.KEYS.PROJECT, 'HG1 BE', 'Nome principal do projeto.'],
-    [CONFIG.KEYS.BOM, 'RISERS JS', 'Nome da lista de materiais (Bill of Materials).'],
-    [CONFIG.KEYS.KOJO_PREFIX, 'HG1.PLB.RGH.JS.BE.UNT.RISER', 'Prefixo fixo para o código KOJO.'],
-    [CONFIG.KEYS.ENGINEER, 'WANDERSON', 'Nome do engenheiro responsável.'],
-    [CONFIG.KEYS.VERSION, '', 'Versão do relatório (ex: 01, 02, 03...).'],
+    [' 🏷️ CABEÇALHO', '', 'Informações do relatório'],
+    [CONFIG.KEYS.PROJECT, 'HG1 BE', 'Nome do projeto'],
+    [CONFIG.KEYS.BOM, 'RISERS JS', 'Nome da BOM'],
+    [CONFIG.KEYS.KOJO_PREFIX, 'HG1.PLB.RGH.JS.BE.UNT.RISER', 'Prefixo KOJO'],
+    [CONFIG.KEYS.ENGINEER, 'WANDERSON', 'Engenheiro'],
+    [CONFIG.KEYS.VERSION, '', 'Versão (ex: 01, 02)'],
     ['', '', ''],
-    [' ⚙️ OPÇÕES DE RELATÓRIO', '', 'Defina opções adicionais para a geração dos relatórios.'],
-    [CONFIG.KEYS.SORT_BY, 'J - DESC', 'Coluna a ser usada para classificar os itens no relatório.'],
-    [CONFIG.KEYS.SORT_ORDER, 'Ascendente (A-Z, 0-9)', 'A ordem de classificação (ascendente ou descendente).'],
+    [' ⚙️ OPÇÕES', '', 'Classificação dos dados'],
+    [CONFIG.KEYS.SORT_BY, 'Coluna 2', 'Coluna para classificar'],
+    [CONFIG.KEYS.SORT_ORDER, 'Ascendente (A-Z, 0-9)', 'Ordem de classificação'],
     ['', '', ''],
-    [' 💾 SALVAMENTO', '', 'Configurações para exportação e salvamento dos arquivos.'],
-    [CONFIG.KEYS.DRIVE_FOLDER_ID, '', 'Cole o LINK COMPLETO da pasta ou apenas o ID.'],
-    [CONFIG.KEYS.DRIVE_FOLDER_NAME, '', 'Nome da pasta a ser criada caso o link/ID não seja fornecido.'],
-    [CONFIG.KEYS.PDF_PREFIX, 'HG1.PLB.RGH.JS.BE.UNT.RISER', 'Prefixo para os nomes dos arquivos PDF exportados.']
+    [' 💾 SALVAMENTO', '', 'Exportação de PDFs'],
+    [CONFIG.KEYS.DRIVE_FOLDER_ID, '', 'Link ou ID da pasta'],
+    [CONFIG.KEYS.DRIVE_FOLDER_NAME, '', 'Nome da pasta'],
+    [CONFIG.KEYS.PDF_PREFIX, 'HG1.PLB.RGH.JS.BE.UNT.RISER', 'Prefixo dos PDFs']
   ];
 
   configSheet.getRange(1, 1, configData.length, 3).setValues(configData);
-  configSheet.getRange("A1:C" + configData.length).setFontFamily(CONFIG.COLORS.FONT_FAMILY).setVerticalAlignment('middle').setFontColor(CONFIG.COLORS.FONT_DARK);
-  configSheet.setColumnWidth(1, 220).setColumnWidth(2, 300).setColumnWidth(3, 350);
-  configSheet.getRange('A1:C1').merge().setValue('⚙️ PAINEL DE CONFIGURAÇÃO | RELATÓRIOS DINÂMICOS').setBackground(CONFIG.COLORS.HEADER_BG).setFontColor(CONFIG.COLORS.FONT_LIGHT).setFontSize(14).setFontWeight('bold').setHorizontalAlignment('center');
   
-  const sections = { 3: { endRow: 7 }, 9: { endRow: 14 }, 16: { endRow: 21 }, 23: { endRow: 26 }, 28: { endRow: 31 } };
+  // Formatação
+  const s = CONFIG.COLORS;
+  configSheet.getRange("A1:C" + configData.length)
+    .setFontFamily(s.FONT_FAMILY)
+    .setVerticalAlignment('middle')
+    .setFontColor(s.FONT_DARK);
+  
+  configSheet.setColumnWidth(1, 220).setColumnWidth(2, 300).setColumnWidth(3, 350);
+  
+  configSheet.getRange('A1:C1').merge()
+    .setValue('⚙️ PAINEL DE CONFIGURAÇÃO | RELATÓRIOS DINÂMICOS')
+    .setBackground(s.HEADER_BG)
+    .setFontColor(s.FONT_LIGHT)
+    .setFontSize(14)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center');
+
+  const sections = {
+    3: { endRow: 7 },
+    9: { endRow: 14 },
+    16: { endRow: 21 },
+    23: { endRow: 25 },
+    27: { endRow: 30 }
+  };
 
   for (const startRow in sections) {
-    const s = sections[startRow], start = parseInt(startRow);
-    configSheet.getRange(start, 1, 1, 3).merge().setBackground(CONFIG.COLORS.SECTION_BG).setFontColor(CONFIG.COLORS.FONT_LIGHT).setFontSize(11).setFontWeight('bold').setHorizontalAlignment('left');
+    const start = parseInt(startRow);
+    const endRow = sections[startRow].endRow;
+    
+    configSheet.getRange(start, 1, 1, 3).merge()
+      .setBackground(s.SECTION_BG)
+      .setFontColor(s.FONT_LIGHT)
+      .setFontSize(11)
+      .setFontWeight('bold')
+      .setHorizontalAlignment('left');
+    
     configSheet.setRowHeight(start, 30);
-    for (let r = start + 1; r <= s.endRow; r++) {
-      configSheet.getRange(r, 2).setBackground(CONFIG.COLORS.INPUT_BG).setHorizontalAlignment('center');
+    
+    for (let r = start + 1; r <= endRow; r++) {
+      configSheet.getRange(r, 2).setBackground(s.INPUT_BG).setHorizontalAlignment('center');
       configSheet.getRange(r, 1).setFontWeight('500');
-      configSheet.getRange(r, 3).setFontStyle('italic').setFontColor(CONFIG.COLORS.FONT_SUBTLE);
+      configSheet.getRange(r, 3).setFontStyle('italic').setFontColor(s.FONT_SUBTLE);
       configSheet.setRowHeight(r, 28);
     }
-    configSheet.getRange(start, 1, s.endRow - start + 1, 3).setBorder(true, true, true, true, null, null, CONFIG.COLORS.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+    
+    configSheet.getRange(start, 1, endRow - start + 1, 3)
+      .setBorder(true, true, true, true, null, null, s.BORDER, SpreadsheetApp.BorderStyle.SOLID);
   }
   
   configSheet.getRange(21, 2).setNumberFormat('@STRING@');
   configSheet.setFrozenRows(1);
   
-  configSheet.getRange('E1:M1').merge().setValue('PAINEL UNIFICADO DE AGRUPAMENTO E PRÉ-VISUALIZAÇÃO')
-      .setBackground(CONFIG.COLORS.HEADER_BG).setFontColor(CONFIG.COLORS.FONT_LIGHT).setFontSize(14)
-      .setFontWeight('bold').setHorizontalAlignment('center').setFontFamily(CONFIG.COLORS.FONT_FAMILY);
+  // Painel de pré-visualização
+  configSheet.getRange('E1:M1').merge()
+    .setValue('PAINEL UNIFICADO DE AGRUPAMENTO E PRÉ-VISUALIZAÇÃO')
+    .setBackground(s.HEADER_BG)
+    .setFontColor(s.FONT_LIGHT)
+    .setFontSize(14)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setFontFamily(s.FONT_FAMILY);
+  
   configSheet.setRowHeight(1, 40);
 
   SpreadsheetApp.flush();
@@ -333,150 +352,209 @@ function updateConfigDropdowns() {
   if (!configSheet) return;
   
   const config = ConfigService.getAll();
-  const sourceSheets = ss.getSheets().map(s => s.getName()).filter(n => n !== CONFIG.SHEETS.CONFIG);
+
+  // Dropdown Aba Origem
+  const sourceSheets = ss.getSheets()
+    .map(s => s.getName())
+    .filter(n => n !== CONFIG.SHEETS.CONFIG);
   
   if (sourceSheets.length > 0) {
     configSheet.getRange('B4').setDataValidation(
-      SpreadsheetApp.newDataValidation().requireValueInList(sourceSheets, true).setAllowInvalid(false).build()
+      SpreadsheetApp.newDataValidation()
+        .requireValueInList(sourceSheets, true)
+        .setAllowInvalid(false)
+        .build()
     );
   }
 
   const sourceSheet = ss.getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
   if (!sourceSheet || sourceSheet.getLastColumn() === 0) return;
   
+  // Dropdowns de colunas
   const headers = sourceSheet.getRange(1, 1, 1, sourceSheet.getLastColumn()).getValues()[0];
-  const columnOptions = headers.map((h, i) => `${Utils.columnToLetter(i + 1)} - ${h || `Coluna ${Utils.columnToLetter(i + 1)}`}`);
-  const columnRule = SpreadsheetApp.newDataValidation().requireValueInList(columnOptions, true).setAllowInvalid(false).build();
+  const columnOptions = headers.map((h, i) => 
+    `${String.fromCharCode(65 + i)} - ${h || `Coluna ${String.fromCharCode(65 + i)}`}`
+  );
   
-  [5, 6, 7, 10, 11, 12, 13, 14].forEach(row => configSheet.getRange(row, 2).setDataValidation(columnRule));
-  configSheet.getRange(24, 2).setDataValidation(columnRule);
+  const columnRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(columnOptions, true)
+    .setAllowInvalid(false)
+    .build();
+  
+  [5, 6, 7, 10, 11, 12, 13, 14].forEach(row => 
+    configSheet.getRange(row, 2).setDataValidation(columnRule)
+  );
+
+  // Dropdowns de classificação
+  const sortColumnOptions = ['Coluna 1', 'Coluna 2', 'Coluna 3', 'Coluna 4', 'Coluna 5'];
+  configSheet.getRange(24, 2).setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList(sortColumnOptions, true)
+      .setAllowInvalid(false)
+      .build()
+  );
 
   const sortOrderOptions = ['Ascendente (A-Z, 0-9)', 'Descendente (Z-A, 9-0)'];
   configSheet.getRange(25, 2).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList(sortOrderOptions, true).setAllowInvalid(false).build()
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList(sortOrderOptions, true)
+      .setAllowInvalid(false)
+      .build()
   );
 }
 
 // ============================================================================
-// PAINEL DE AGRUPAMENTO
+// PAINÉIS DE AGRUPAMENTO
 // ============================================================================
 
-function getUniqueColumnValues(sheet, columnIndex) {
-  const cache = CacheManager.get(`unique_${sheet.getSheetId()}_${columnIndex}`);
-  if (cache) return cache;
+function updateGroupingPanel() {
+  const config = ConfigService.getAll();
+  const sourceSheet = SpreadsheetApp.getActiveSpreadsheet()
+    .getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
   
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-  
-  const values = sheet.getRange(2, columnIndex, lastRow - 1).getValues().flat();
-  const uniqueValues = [...new Set(values.filter(v => v))].sort((a, b) => 
-    String(a).localeCompare(String(b), undefined, { numeric: true })
-  );
-  
-  CacheManager.put(`unique_${sheet.getSheetId()}_${columnIndex}`, uniqueValues);
-  return uniqueValues;
+  for (let level = 1; level <= 3; level++) {
+    updateSingleLevelPanel(level, config, sourceSheet);
+  }
 }
 
 function updateSingleLevelPanel(level, config, sourceSheet) {
   const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEETS.CONFIG);
   const startCol = 5 + (level - 1) * 2;
   const levelId = `NÍVEL ${level}`;
-  const groupConfigKey = `Agrupar por Nível ${level}`;
-  const groupConfig = config[groupConfigKey];
+  const groupConfig = config[`Agrupar por Nível ${level}`];
 
   configSheet.getRange(3, startCol, configSheet.getMaxRows() - 2, 2).clear();
   configSheet.setColumnWidth(startCol, 150).setColumnWidth(startCol + 1, 50);
+  
   const headerRange = configSheet.getRange(3, startCol, 1, 2).merge();
   
   if (sourceSheet && groupConfig && groupConfig.trim() !== '') {
     const colIndex = Utils.getColumnIndex(groupConfig);
+    
     if (colIndex === -1) {
-      headerRange.setValue(`${levelId}: ERRO`).setBackground(CONFIG.COLORS.PANEL_ERROR_BG).setFontColor(CONFIG.COLORS.FONT_LIGHT).setFontWeight('bold').setHorizontalAlignment('center');
-      configSheet.getRange(4, startCol).setValue('Config. inválida.').setFontColor(CONFIG.COLORS.FONT_SUBTLE).setFontStyle('italic');
+      headerRange.setValue(`${levelId}: ERRO`)
+        .setBackground(CONFIG.COLORS.PANEL_ERROR_BG)
+        .setFontColor(CONFIG.COLORS.FONT_LIGHT)
+        .setFontWeight('bold')
+        .setHorizontalAlignment('center');
+      
+      configSheet.getRange(4, startCol)
+        .setValue('Config. inválida.')
+        .setFontColor(CONFIG.COLORS.FONT_SUBTLE)
+        .setFontStyle('italic');
     } else {
       const colHeader = Utils.getColumnHeader(groupConfig);
-      headerRange.setValue(`${levelId}: ${colHeader.toUpperCase()}`).setBackground(CONFIG.COLORS.SECTION_BG).setFontColor(CONFIG.COLORS.FONT_LIGHT).setFontWeight('bold').setHorizontalAlignment('center');
+      headerRange.setValue(`${levelId}: ${colHeader.toUpperCase()}`)
+        .setBackground(CONFIG.COLORS.SECTION_BG)
+        .setFontColor(CONFIG.COLORS.FONT_LIGHT)
+        .setFontWeight('bold')
+        .setHorizontalAlignment('center');
       
       const uniqueValues = getUniqueColumnValues(sourceSheet, colIndex);
+      
       if (uniqueValues.length > 0) {
-        const valuesFormatted = uniqueValues.map(v => [v === null || v === undefined || v === '' ? '' : v]);
+        const valuesFormatted = uniqueValues.map(v => [v ?? '']);
         configSheet.getRange(4, startCol, valuesFormatted.length, 1).setValues(valuesFormatted);
         configSheet.getRange(4, startCol + 1, valuesFormatted.length, 1).insertCheckboxes();
       }
     }
   } else {
-    headerRange.setValue(levelId).setBackground(CONFIG.COLORS.PANEL_EMPTY_BG).setFontColor(CONFIG.COLORS.FONT_LIGHT).setFontWeight('bold').setHorizontalAlignment('center');
+    headerRange.setValue(levelId)
+      .setBackground(CONFIG.COLORS.PANEL_EMPTY_BG)
+      .setFontColor(CONFIG.COLORS.FONT_LIGHT)
+      .setFontWeight('bold')
+      .setHorizontalAlignment('center');
+    
     const message = sourceSheet ? '(Não configurado)' : '(Selecione Aba Origem)';
-    configSheet.getRange(4, startCol).setValue(message).setFontColor(CONFIG.COLORS.FONT_SUBTLE).setFontStyle('italic');
+    configSheet.getRange(4, startCol)
+      .setValue(message)
+      .setFontColor(CONFIG.COLORS.FONT_SUBTLE)
+      .setFontStyle('italic');
   }
 
-  const lastRowInPanel = configSheet.getRange(configSheet.getMaxRows(), startCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
+  const lastRowInPanel = configSheet.getRange(configSheet.getMaxRows(), startCol)
+    .getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
   const effectiveLastRow = Math.max(3, lastRowInPanel);
-  configSheet.getRange(3, startCol, effectiveLastRow - 2, 2).setBorder(true, true, true, true, true, true, CONFIG.COLORS.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  
+  configSheet.getRange(3, startCol, effectiveLastRow - 2, 2)
+    .setBorder(true, true, true, true, true, true, CONFIG.COLORS.BORDER, SpreadsheetApp.BorderStyle.SOLID);
 }
 
-function updateGroupingPanel() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const config = ConfigService.getAll();
-  const sourceSheet = ss.getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
+function getUniqueColumnValues(sheet, columnIndex) {
+  const cacheKey = `unique_${sheet.getSheetId()}_${columnIndex}`;
+  const cached = CacheManager.get(cacheKey);
+  if (cached) return cached;
   
-  updateSingleLevelPanel(1, config, sourceSheet);
-  updateSingleLevelPanel(2, config, sourceSheet);
-  updateSingleLevelPanel(3, config, sourceSheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  
+  const values = sheet.getRange(2, columnIndex, lastRow - 1).getValues().flat();
+  const uniqueValues = [...new Set(values.filter(v => v))]
+    .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+  
+  CacheManager.put(cacheKey, uniqueValues);
+  return uniqueValues;
 }
 
 function getPanelSelections(sheet) {
   const selections = {};
+  
   for (let i = 0; i < 3; i++) {
     const startCol = 5 + (i * 2);
     const headerRange = sheet.getRange(3, startCol);
     if (headerRange.isBlank()) continue;
 
-    const header = headerRange.getValue();
-    const levelId = header.split(':')[0].trim();
-    const lastDataRow = sheet.getRange(sheet.getMaxRows(), startCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
+    const levelId = headerRange.getValue().split(':')[0].trim();
+    const lastDataRow = sheet.getRange(sheet.getMaxRows(), startCol)
+      .getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
     
     if (lastDataRow >= 4) {
       const numItems = lastDataRow - 3;
       const values = sheet.getRange(4, startCol, numItems, 1).getValues().flat();
       const checkboxes = sheet.getRange(4, startCol + 1, numItems, 1).getValues().flat();
+      
       const selectedValues = values
         .map((v, index) => ({ value: v, checked: checkboxes[index] }))
         .filter(item => item.checked === true)
-        .map(item => {
-          const val = item.value;
-          return val === null || val === undefined || val === '' ? '' : val;
-        });
+        .map(item => item.value ?? '');
+      
       selections[levelId] = new Set(selectedValues);
     } else {
       selections[levelId] = new Set();
     }
   }
+  
   return selections;
 }
 
 // ============================================================================
-// PRÉ-VISUALIZAÇÃO DE COMBINAÇÕES
+// PRÉ-VISUALIZAÇÃO
 // ============================================================================
 
 function updatePreviewPanel(previewStartCol) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const configSheet = ss.getSheetByName(CONFIG.SHEETS.CONFIG);
-  const internalDataCol = previewStartCol + 3;
-
-  const combinations = getSelectedCombinationsFromPanel();
+  
+  const combinations = getSelectedCombinations();
   const existingSuffixes = new Map();
-  const lastPreviewRow = configSheet.getRange(configSheet.getMaxRows(), previewStartCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
+  
+  const lastPreviewRow = configSheet.getRange(configSheet.getMaxRows(), previewStartCol)
+    .getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
   
   if (lastPreviewRow >= 4) {
-    configSheet.getRange(4, previewStartCol, lastPreviewRow - 3, 3).getValues().forEach(row => {
-      if (row[0]) existingSuffixes.set(row[0], row[2]);
-    });
+    configSheet.getRange(4, previewStartCol, lastPreviewRow - 3, 3).getValues()
+      .forEach(row => {
+        if (row[0]) existingSuffixes.set(row[0], row[2]);
+      });
   }
   
   configSheet.getRange(3, previewStartCol, configSheet.getMaxRows() - 2, 4).clear();
-  configSheet.getRange(3, previewStartCol, 1, 3).setValues([['COMBINAÇÃO GERADA', 'CRIAR?', 'SUFIXO KOJO FINAL']])
-    .setBackground(CONFIG.COLORS.HEADER_BG).setFontColor(CONFIG.COLORS.FONT_LIGHT).setFontWeight('bold');
+
+  configSheet.getRange(3, previewStartCol, 1, 3)
+    .setValues([['COMBINAÇÃO GERADA', 'CRIAR?', 'SUFIXO KOJO FINAL']])
+    .setBackground(CONFIG.COLORS.HEADER_BG)
+    .setFontColor(CONFIG.COLORS.FONT_LIGHT)
+    .setFontWeight('bold');
   
   if (combinations.length > 0) {
     const tableData = combinations.map(combo => {
@@ -484,22 +562,28 @@ function updatePreviewPanel(previewStartCol) {
       const kojoSuffix = existingSuffixes.get(combo) || displayCombo;
       return [displayCombo, true, kojoSuffix, combo];
     });
+    
     configSheet.getRange(4, previewStartCol, tableData.length, 4).setValues(tableData);
     configSheet.getRange(4, previewStartCol + 1, tableData.length, 1).insertCheckboxes();
     configSheet.getRange(4, previewStartCol + 2, tableData.length, 1).setBackground(CONFIG.COLORS.INPUT_BG);
   }
   
-  configSheet.setColumnWidth(previewStartCol, 250).setColumnWidth(previewStartCol + 1, 80).setColumnWidth(previewStartCol + 2, 250);
-  configSheet.hideColumns(internalDataCol);
+  configSheet.setColumnWidth(previewStartCol, 250)
+    .setColumnWidth(previewStartCol + 1, 80)
+    .setColumnWidth(previewStartCol + 2, 250);
+  configSheet.hideColumns(previewStartCol + 3);
 
-  const lastCombinationRow = configSheet.getRange(configSheet.getMaxRows(), previewStartCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
+  const lastCombinationRow = configSheet.getRange(configSheet.getMaxRows(), previewStartCol)
+    .getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
   const effectiveLastRow = Math.max(3, lastCombinationRow);
-  configSheet.getRange(3, previewStartCol, effectiveLastRow - 2, 3).setBorder(true, true, true, true, true, true, CONFIG.COLORS.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  
+  configSheet.getRange(3, previewStartCol, effectiveLastRow - 2, 3)
+    .setBorder(true, true, true, true, true, true, CONFIG.COLORS.BORDER, SpreadsheetApp.BorderStyle.SOLID);
   
   ss.toast('Pré-visualização atualizada!', 'Sucesso', 3);
 }
 
-function getSelectedCombinationsFromPanel() {
+function getSelectedCombinations() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const configSheet = ss.getSheetByName(CONFIG.SHEETS.CONFIG);
   const config = ConfigService.getAll();
@@ -508,8 +592,8 @@ function getSelectedCombinationsFromPanel() {
   if (!sourceSheet) return [];
   
   const groupConfigs = [
-    config[CONFIG.KEYS.GROUP_L1], 
-    config[CONFIG.KEYS.GROUP_L2], 
+    config[CONFIG.KEYS.GROUP_L1],
+    config[CONFIG.KEYS.GROUP_L2],
     config[CONFIG.KEYS.GROUP_L3]
   ].filter(Boolean);
   
@@ -517,7 +601,8 @@ function getSelectedCombinationsFromPanel() {
 
   const groupIndices = groupConfigs.map(Utils.getColumnIndex);
   const panelSelections = getPanelSelections(configSheet);
-  const activeSelectionLevels = Object.keys(panelSelections).filter(level => panelSelections[level].size > 0);
+  const activeSelectionLevels = Object.keys(panelSelections)
+    .filter(level => panelSelections[level].size > 0);
   
   if (activeSelectionLevels.length === 0) return [];
   
@@ -527,10 +612,10 @@ function getSelectedCombinationsFromPanel() {
   allData.forEach(row => {
     const combinationParts = groupIndices.map(index => {
       const value = row[index - 1];
-      return value === null || value === undefined || value === '' ? '' : String(value).trim();
+      return value ?? '';
     });
     
-    if (combinationParts.every(part => part !== '')) {
+    if (combinationParts.every(part => String(part).trim() !== '')) {
       existingCombinations.add(combinationParts.join(CONFIG.DELIMITER));
     }
   });
@@ -541,16 +626,15 @@ function getSelectedCombinationsFromPanel() {
       const levelId = `NÍVEL ${i + 1}`;
       if (!panelSelections[levelId]) return false;
       
-      const normalizedPart = part.trim();
-      return Array.from(panelSelections[levelId]).some(selected => 
-        String(selected).trim() === normalizedPart
-      );
+      return Array.from(panelSelections[levelId])
+        .some(selected => String(selected).trim() === String(part).trim());
     });
   });
 
   return finalCombinations.sort((a, b) => {
     const aParts = a.split(CONFIG.DELIMITER);
     const bParts = b.split(CONFIG.DELIMITER);
+    
     for (let i = 0; i < Math.min(aParts.length, bParts.length); i++) {
       const aNum = parseFloat(aParts[i]);
       const bNum = parseFloat(bParts[i]);
@@ -572,28 +656,43 @@ function getSelectedCombinationsFromPanel() {
 
 function runProcessing() {
   CacheManager.invalidateAll();
+  
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const config = ConfigService.getAll();
   const configSheet = ss.getSheetByName(CONFIG.SHEETS.CONFIG);
   
   const previewStartCol = 11;
-  const lastPreviewRow = configSheet.getRange(configSheet.getMaxRows(), previewStartCol).getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
+  const lastPreviewRow = configSheet.getRange(configSheet.getMaxRows(), previewStartCol)
+    .getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
   
-  if (lastPreviewRow < 4) return { success: false, message: 'Nenhuma combinação encontrada na pré-visualização.' };
+  if (lastPreviewRow < 4) {
+    return { success: false, message: 'Nenhuma combinação na pré-visualização' };
+  }
   
   const previewData = configSheet.getRange(4, previewStartCol, lastPreviewRow - 3, 4).getValues();
-  const combinationsToProcess = previewData.filter(row => row[1] === true).map(row => ({ 
-    displayCombination: String(row[0]),
-    combination: String(row[3]),
-    kojoSuffix: row[2] 
-  }));
+  const combinationsToProcess = previewData
+    .filter(row => row[1] === true)
+    .map(row => ({
+      displayCombination: String(row[0]),
+      combination: String(row[3]),
+      kojoSuffix: row[2]
+    }));
   
-  if (combinationsToProcess.length === 0) return { success: false, message: 'Nenhum relatório selecionado para criação.' };
+  if (combinationsToProcess.length === 0) {
+    return { success: false, message: 'Nenhum relatório selecionado' };
+  }
   
   const sourceSheet = ss.getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
-  if (!sourceSheet) return { success: false, message: 'Aba de origem não encontrada.' };
+  if (!sourceSheet) {
+    return { success: false, message: 'Aba de origem não encontrada' };
+  }
 
-  const groupConfigs = [config[CONFIG.KEYS.GROUP_L1], config[CONFIG.KEYS.GROUP_L2], config[CONFIG.KEYS.GROUP_L3]].filter(Boolean);
+  const groupConfigs = [
+    config[CONFIG.KEYS.GROUP_L1],
+    config[CONFIG.KEYS.GROUP_L2],
+    config[CONFIG.KEYS.GROUP_L3]
+  ].filter(Boolean);
+  
   const groupIndices = groupConfigs.map(Utils.getColumnIndex);
   
   const bomCols = {
@@ -604,11 +703,15 @@ function runProcessing() {
     c5: Utils.getColumnIndex(config[CONFIG.KEYS.COL_5])
   };
 
-  const sortColumnConfig = config[CONFIG.KEYS.SORT_BY] || 'J - DESC';
-  const sortColumnIndex = Utils.getColumnIndex(sortColumnConfig) - 1;
+  // Configuração de classificação
+  const sortColumnKey = config[CONFIG.KEYS.SORT_BY] || 'Coluna 2';
+  const bomKeyToIndex = {
+    'Coluna 1': 0, 'Coluna 2': 1, 'Coluna 3': 2, 'Coluna 4': 3, 'Coluna 5': 4
+  };
+  const sortIndex = bomKeyToIndex[sortColumnKey] ?? 1;
   const sortOrder = config[CONFIG.KEYS.SORT_ORDER] === 'Descendente (Z-A, 9-0)' ? 'desc' : 'asc';
   
-  if (sortColumnIndex < 0) return { success: false, message: `Coluna de classificação "${sortColumnConfig}" inválida.` };
+  const sortConfig = { sortIndex, sortOrder };
 
   const dataMap = new Map();
   combinationsToProcess.forEach(item => dataMap.set(item.combination, []));
@@ -616,41 +719,46 @@ function runProcessing() {
   const allData = sourceSheet.getRange(2, 1, sourceSheet.getLastRow() - 1, sourceSheet.getLastColumn()).getValues();
   
   for (const row of allData) {
-    const rowCombination = groupIndices.map(index => {
-      const value = row[index - 1];
-      return value === null || value === undefined || value === '' ? '' : String(value).trim();
-    }).join(CONFIG.DELIMITER);
+    const rowCombination = groupIndices
+      .map(index => String(row[index - 1] ?? '').trim())
+      .join(CONFIG.DELIMITER);
     
     if (dataMap.has(rowCombination)) {
-      dataMap.get(rowCombination).push([  
-        row[bomCols.c1 - 1], row[bomCols.c2 - 1], row[bomCols.c3 - 1], 
-        row[bomCols.c4 - 1], parseFloat(row[bomCols.c5 - 1]) || 0,
-        row[sortColumnIndex]
+      dataMap.get(rowCombination).push([
+        row[bomCols.c1 - 1],
+        row[bomCols.c2 - 1],
+        row[bomCols.c3 - 1],
+        row[bomCols.c4 - 1],
+        parseFloat(row[bomCols.c5 - 1]) || 0
       ]);
     }
   }
   
   let createdCount = 0;
   
-  for (const item of combinationsToProcess) {
+  combinationsToProcess.forEach(item => {
     const { displayCombination, combination, kojoSuffix } = item;
     const rawData = dataMap.get(combination);
-    if (!rawData || rawData.length === 0) continue;
+    if (!rawData || rawData.length === 0) return;
     
-    const processedData = groupAndSumData(rawData, sortOrder);
+    const processedData = groupAndSumData(rawData, sortConfig);
     const sanitizedName = Utils.sanitizeSheetName(displayCombination);
     
-    let targetSheet = ss.getSheetByName(sanitizedName) || ss.insertSheet(sanitizedName);
-    targetSheet.clear();
-
+    let targetSheet = ss.getSheetByName(sanitizedName);
+    if (targetSheet) {
+      targetSheet.clear();
+    } else {
+      targetSheet = ss.insertSheet(sanitizedName);
+    }
+    
     createAndFormatReport(targetSheet, combination, kojoSuffix, processedData);
     createdCount++;
-  }
+  });
   
   return { success: true, created: createdCount };
 }
 
-function groupAndSumData(data, sortOrder) {
+function groupAndSumData(data, sortConfig) {
   const grouped = {};
   
   data.forEach(row => {
@@ -663,11 +771,12 @@ function groupAndSumData(data, sortOrder) {
   });
 
   const groupedData = Object.values(grouped);
+  const { sortIndex, sortOrder } = sortConfig;
   const direction = sortOrder === 'asc' ? 1 : -1;
 
   groupedData.sort((a, b) => {
-    const valA = a[5];
-    const valB = b[5];
+    const valA = a[sortIndex];
+    const valB = b[sortIndex];
 
     if (valA === null || valA === undefined || valA === '') return 1;
     if (valB === null || valB === undefined || valB === '') return -1;
@@ -682,44 +791,37 @@ function groupAndSumData(data, sortOrder) {
     return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * direction;
   });
   
-  return groupedData.map(row => row.slice(0, 5));
+  return groupedData;
 }
 
 function createAndFormatReport(sheet, combination, kojoSuffix, data) {
   const config = ConfigService.getAll();
-  const reportConfig = { 
-    project: config[CONFIG.KEYS.PROJECT], 
-    bom: config[CONFIG.KEYS.BOM], 
-    kojoPrefix: config[CONFIG.KEYS.KOJO_PREFIX], 
-    engineer: config[CONFIG.KEYS.ENGINEER], 
+  
+  const reportConfig = {
+    project: config[CONFIG.KEYS.PROJECT],
+    bom: config[CONFIG.KEYS.BOM],
+    kojoPrefix: config[CONFIG.KEYS.KOJO_PREFIX],
+    engineer: config[CONFIG.KEYS.ENGINEER],
     version: config[CONFIG.KEYS.VERSION]
   };
   
-  const headers = { 
-    h1: Utils.getColumnHeader(config[CONFIG.KEYS.COL_1]), 
-    h2: Utils.getColumnHeader(config[CONFIG.KEYS.COL_2]), 
-    h3: Utils.getColumnHeader(config[CONFIG.KEYS.COL_3]), 
-    h4: Utils.getColumnHeader(config[CONFIG.KEYS.COL_4]), 
-    h5: 'QTY' 
+  const headers = {
+    h1: Utils.getColumnHeader(config[CONFIG.KEYS.COL_1]),
+    h2: Utils.getColumnHeader(config[CONFIG.KEYS.COL_2]),
+    h3: Utils.getColumnHeader(config[CONFIG.KEYS.COL_3]),
+    h4: Utils.getColumnHeader(config[CONFIG.KEYS.COL_4]),
+    h5: 'QTY'
   };
 
-  const headerValues = createHeaderData(reportConfig, kojoSuffix);
-  formatHeader(sheet, headerValues.length);
-  sheet.getRange(1, 1, headerValues.length, 2).setValues(headerValues);
-
-  const dataStartRow = headerValues.length + 2;
-  const finalData = [[headers.h1, headers.h2, headers.h3, headers.h4, headers.h5]].concat(data);
-  sheet.getRange(dataStartRow, 1, finalData.length, 5).setValues(finalData);
-  formatDataTable(sheet, dataStartRow, finalData.length);
-  setupColumnWidths(sheet);
-  protectHeader(sheet, dataStartRow - 1);
-}
-
-function createHeaderData(reportConfig, kojoSuffix) {
-  const lastUpdate = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'MM/dd/yyyy');
+  const lastUpdate = Utilities.formatDate(
+    new Date(),
+    SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(),
+    'MM/dd/yyyy'
+  );
+  
   const bomKojoComplete = `${reportConfig.kojoPrefix}.${kojoSuffix}`;
   
-  return [
+  const headerValues = [
     ['PROJECT:', reportConfig.project],
     ['BOM:', reportConfig.bom],
     ['BOM KOJO:', bomKojoComplete],
@@ -727,71 +829,76 @@ function createHeaderData(reportConfig, kojoSuffix) {
     ['VERSION:', reportConfig.version],
     ['LAST UPDATE:', lastUpdate]
   ];
-}
-
-function formatHeader(sheet, headerLength) {
-  sheet.getRange(1, 2, headerLength, 1).setNumberFormat('@STRING@');
-  for (let r = 1; r <= headerLength; r++) {
+  
+  sheet.getRange(1, 1, headerValues.length, 2).setValues(headerValues);
+  sheet.getRange(1, 2, headerValues.length, 1).setNumberFormat('@STRING@');
+  
+  for (let r = 1; r <= headerValues.length; r++) {
     sheet.getRange(r, 2, 1, 4).merge();
   }
-  sheet.getRange(1, 1, headerLength, 5).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, true, false);
-}
+  
+  sheet.getRange(1, 1, headerValues.length, 5)
+    .applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, true, false);
 
-function formatDataTable(sheet, startRow, numRows) {
-  if (numRows <= 1) return;
-  sheet.getRange(startRow, 1, numRows, 5).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, true, false);
-  sheet.getRange(startRow, 1, 1, 5).setFontWeight('bold');
-}
+  const dataStartRow = headerValues.length + 2;
+  const finalData = [[headers.h1, headers.h2, headers.h3, headers.h4, headers.h5]].concat(data);
+  
+  sheet.getRange(dataStartRow, 1, finalData.length, 5).setValues(finalData);
+  sheet.getRange(dataStartRow, 1, finalData.length, 5)
+    .applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, true, false);
+  sheet.getRange(dataStartRow, 1, 1, 5).setFontWeight('bold');
 
-function setupColumnWidths(sheet) {
-  sheet.setColumnWidth(1, 105).setColumnWidth(2, 570).setColumnWidth(3, 105).setColumnWidth(4, 105).setColumnWidth(5, 105);
-}
+  sheet.setColumnWidth(1, 105)
+    .setColumnWidth(2, 570)
+    .setColumnWidth(3, 105)
+    .setColumnWidth(4, 105)
+    .setColumnWidth(5, 105);
 
-function protectHeader(sheet, headerEndRow) {
   try {
-    const protection = sheet.getRange(1, 1, headerEndRow, 5).protect();
-    protection.setDescription('Cabeçalho protegido').removeEditors(protection.getEditors());
+    const protection = sheet.getRange(1, 1, dataStartRow - 1, 5).protect();
+    protection.setDescription('Cabeçalho protegido');
+    protection.removeEditors(protection.getEditors());
   } catch (e) {
-    Logger.log('Erro ao proteger cabeçalho:', e.message);
+    Logger.log(`Aviso: ${e.message}`);
   }
 }
 
 function clearOldReports() {
   const ui = SpreadsheetApp.getUi();
-  const response = ui.alert('Confirmação', 'Apagar TODAS as abas de relatório?', ui.ButtonSet.YES_NO);
+  const response = ui.alert(
+    'Confirmação',
+    'Apagar TODAS as abas de relatório?',
+    ui.ButtonSet.YES_NO
+  );
   
-  if (response == ui.Button.YES) {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const config = ConfigService.getAll();
-    const protectedSheets = [CONFIG.SHEETS.CONFIG, config[CONFIG.KEYS.SOURCE_SHEET]].filter(Boolean);
-    
-    let deletedCount = 0;
-    ss.getSheets().forEach(sheet => {
-      const sheetName = sheet.getName();
-      if (!protectedSheets.includes(sheetName)) {
-        ss.deleteSheet(sheet);
-        deletedCount++;
-      }
-    });
-    
-    if (deletedCount > 0) {
-      ui.alert('Limpeza Concluída', `${deletedCount} abas removidas.`, ui.ButtonSet.OK);
-    } else {
-      ui.alert('Limpeza', 'Nenhuma aba para remover.', ui.ButtonSet.OK);
+  if (response !== ui.Button.YES) return;
+  
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const config = ConfigService.getAll();
+  const protectedSheets = [CONFIG.SHEETS.CONFIG, config[CONFIG.KEYS.SOURCE_SHEET]].filter(Boolean);
+  
+  let deletedCount = 0;
+  ss.getSheets().forEach(sheet => {
+    if (!protectedSheets.includes(sheet.getName())) {
+      ss.deleteSheet(sheet);
+      deletedCount++;
     }
-  }
+  });
+  
+  ui.alert('Limpeza Concluída', `${deletedCount} abas removidas.`, ui.ButtonSet.OK);
 }
 
 // ============================================================================
-// SISTEMA DE FIXADORES
+// FIXADORES
 // ============================================================================
 
 function abrirSeletorFixadores() {
-  const html = HtmlService.createHtmlOutputFromFile('FixadoresSidebar')
-    .setTitle('🔧 Incluir Fixadores')
-    .setWidth(750)
-    .setHeight(650);
-  SpreadsheetApp.getUi().showModalDialog(html, '🔧 Incluir Fixadores');
+  const html = HtmlService.createHtmlOutputFromFile('FixadorSelector')
+    .setWidth(900)
+    .setHeight(800)
+    .setTitle('Seletor de Fixadores');
+  
+  SpreadsheetApp.getUi().showModalDialog(html, 'Seleção de Tubos');
 }
 
 function getPipesElegiveis() {
@@ -799,117 +906,143 @@ function getPipesElegiveis() {
   const sourceSheet = SpreadsheetApp.getActiveSpreadsheet()
     .getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
   
-  if (!sourceSheet || sourceSheet.getLastRow() < 2) return [];
+  if (!sourceSheet) return [];
   
-  const COL = COLUMN_MAPPING.SOURCE;
   const lastRow = sourceSheet.getLastRow();
-  const data = sourceSheet.getRange(2, 1, lastRow - 1, 15).getValues();
+  if (lastRow < 2) return [];
   
-  return data
-    .filter(row => {
-      const desc = String(row[COL.DESC] || '').trim().toUpperCase();
-      const trade = String(row[COL.TRADE] || '').trim().toUpperCase();
+  const data = sourceSheet.getRange(2, 1, lastRow - 1, sourceSheet.getLastColumn()).getValues();
+  const pipes = [];
+  
+  data.forEach((row, idx) => {
+    // Mapeamento: A=PROJECT, B=SECTION, C=QTT, D=UNIT_ID, E=UNIT_TYPE, F=LOCAL, G=TRADE, H=PHASE, I=FLOOR, J=DESC, K=QTY
+    const section = String(row[1] || '');
+    const desc = String(row[9] || '');
+    const qty = parseFloat(row[10]) || 0;
+    
+    if (validarTipoFixacao(section) && desc.toUpperCase().includes('PIPE') && qty > 0) {
+      const diameter = Utils.extractDiameter(desc);
+      const isRiser = section.toUpperCase().includes('RISER');
+      const fixConfig = isRiser ? CONFIG.FIXADORES.RISER : CONFIG.FIXADORES.LOOP;
+      const itemMap = isRiser ? fixConfig.clamps : fixConfig.hangs;
       
-      return (desc.includes('PIPE') && 
-              (desc.includes('RISER') || desc.includes('COLGANTE')) &&
-              (trade === 'WS' || trade === '10.01'));
-    })
-    .map(row => {
-      const desc = String(row[COL.DESC] || '').trim();
-      const section = String(row[COL.SECTION] || '').trim();
-      const rowIndex = data.indexOf(row) + 2;
-      
-      const nextRow = rowIndex < lastRow ? sourceSheet.getRange(rowIndex + 1, COL.DESC + 1).getValue() : '';
-      const jaTemFixador = String(nextRow).includes('LOOP HANG') || String(nextRow).includes('RISER CLAMP');
-      
-      return {
-        row: rowIndex,
-        section: section,
-        trade: String(row[COL.TRADE] || '').trim(),
-        floor: String(row[COL.FLOOR] || '').trim(),
-        unitType: String(row[COL.UNIT_TYPE] || '').trim(),
-        desc: desc,
-        qty: parseFloat(row[COL.QTY]) || 0,
-        uom: String(row[COL.UOM] || '').trim(),
-        diameter: Utils.extractDiameter(desc),
-        jaTemFixador: jaTemFixador
-      };
-    });
+      if (diameter && itemMap[diameter]) {
+        pipes.push({
+          rowIndex: idx + 2,
+          section: row[1],
+          unitType: row[4],
+          local: row[5],
+          trade: row[6],
+          phase: row[7],
+          unitid: row[3],
+          desc: desc,
+          qty: qty,
+          uom: row[11],
+          diameter: diameter,
+          isRiser: isRiser,
+          originalRow: [...row]
+        });
+      }
+    }
+  });
+  
+  return pipes;
+}
+
+function validarTipoFixacao(section) {
+  const s = String(section).toUpperCase();
+  return s.includes('RISER') || s.includes('COLGANTE');
 }
 
 function processarFixadoresSelecionados(selectedPipes) {
-  if (!selectedPipes || selectedPipes.length === 0) {
-    return { success: false, message: 'Nenhum tubo selecionado' };
-  }
-  
   const config = ConfigService.getAll();
   const sourceSheet = SpreadsheetApp.getActiveSpreadsheet()
     .getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
   
-  if (!sourceSheet) return { success: false, message: 'Aba de origem não encontrada' };
+  if (!sourceSheet || !selectedPipes || selectedPipes.length === 0) {
+    return { success: false, message: 'Dados inválidos' };
+  }
   
-  const COL = COLUMN_MAPPING.SOURCE;
+  selectedPipes.sort((a, b) => b.rowIndex - a.rowIndex);
+  
   let totalAdded = 0;
+  const maxCol = sourceSheet.getLastColumn();
   
   selectedPipes.forEach(pipe => {
-    const insertRow = pipe.row + 1;
-    const isRiser = pipe.desc.toUpperCase().includes('RISER');
-    const fixConfig = isRiser ? CONFIG.FIXADORES.RISER : CONFIG.FIXADORES.LOOP;
+    const fixConfig = pipe.isRiser ? CONFIG.FIXADORES.RISER : CONFIG.FIXADORES.LOOP;
+    const itemMap = pipe.isRiser ? fixConfig.clamps : fixConfig.hangs;
+    const fixadorItem = itemMap[pipe.diameter];
     
-    const fixadorPrincipal = isRiser 
-      ? fixConfig.clamps[pipe.diameter] 
-      : fixConfig.hangs[pipe.diameter];
+    if (!fixadorItem) return;
     
-    if (!fixadorPrincipal) return;
-    
-    const qtdFixador = Utils.arredondarInteligente(pipe.qty / fixConfig.interval);
-    if (qtdFixador === 0) return;
-    
+    const formulasPipe = sourceSheet.getRange(pipe.rowIndex, 12, 1, 5).getFormulasR1C1()[0];
     const linhasParaInserir = [];
+    const insertRow = pipe.rowIndex + 1;
     
-    // Linha do fixador principal
-    const linhaFixador = new Array(15).fill('');
-    linhaFixador[COL.SECTION] = pipe.section;
-    linhaFixador[COL.QTT] = 1;
-    linhaFixador[COL.UNIT_ID] = '';
-    linhaFixador[COL.UNIT_TYPE] = '';
-    linhaFixador[COL.LOCAL] = pipe.section;
-    linhaFixador[COL.TRADE] = 'FIX';
-    linhaFixador[COL.PHASE] = 'Job Site';
-    linhaFixador[COL.FLOOR] = pipe.floor;
-    linhaFixador[COL.DESC] = fixadorPrincipal;
-    linhaFixador[COL.QTY] = `=RC[${COL.QTY - COL.QTT}]*${qtdFixador}`;
-    linhaFixador[COL.UOM] = '#NAME?';
+    // Linha do fixador
+    const linhaFixador = new Array(maxCol).fill('');
+    linhaFixador[0] = pipe.originalRow[0];
+    linhaFixador[1] = pipe.originalRow[1];
+    linhaFixador[2] = pipe.originalRow[2];
+    linhaFixador[3] = pipe.originalRow[3];
+    linhaFixador[4] = pipe.originalRow[4];
+    linhaFixador[5] = pipe.originalRow[5];
+    linhaFixador[6] = 'FIX';
+    linhaFixador[7] = pipe.originalRow[7];
+    linhaFixador[8] = pipe.originalRow[8];
+    linhaFixador[9] = fixadorItem;
+    linhaFixador[10] = `=ROUNDUP(R[-1]C/${fixConfig.interval})`;
     
-    linhasParaInserir.push(linhaFixador);
-    
-    // Materiais auxiliares
-    fixConfig.materials.forEach(mat => {
-      const linhaMaterial = new Array(15).fill('');
-      linhaMaterial[COL.SECTION] = pipe.section;
-      linhaMaterial[COL.QTT] = 1;
-      linhaMaterial[COL.LOCAL] = pipe.section;
-      linhaMaterial[COL.TRADE] = 'FIX';
-      linhaMaterial[COL.PHASE] = 'Job Site';
-      linhaMaterial[COL.FLOOR] = pipe.floor;
-      linhaMaterial[COL.DESC] = mat.desc;
-      linhaMaterial[COL.QTY] = `=RC[${COL.QTY - COL.QTT}]*${qtdFixador * mat.factor}`;
-      linhaMaterial[COL.UOM] = '#NAME?';
-      
-      linhasParaInserir.push(linhaMaterial);
+    formulasPipe.forEach((formula, idx) => {
+      linhaFixador[11 + idx] = formula || pipe.originalRow[11 + idx];
     });
     
-    // Insere as linhas
-    sourceSheet.insertRowsAfter(insertRow - 1, linhasParaInserir.length);
-    sourceSheet.getRange(insertRow, 1, linhasParaInserir.length, 15).setValues(linhasParaInserir);
+    linhasParaInserir.push(linhaFixador);
+    const fixadorRow = insertRow;
     
-    // Aplica fórmulas R1C1
+    // Materiais
+    fixConfig.materials.forEach(mat => {
+      const linhaMat = new Array(maxCol).fill('');
+      linhaMat[0] = pipe.originalRow[0];
+      linhaMat[1] = pipe.originalRow[1];
+      linhaMat[2] = pipe.originalRow[2];
+      linhaMat[3] = pipe.originalRow[3];
+      linhaMat[4] = pipe.originalRow[4];
+      linhaMat[5] = pipe.originalRow[5];
+      linhaMat[6] = 'FIX';
+      linhaMat[7] = pipe.originalRow[7];
+      linhaMat[8] = pipe.originalRow[8];
+      linhaMat[9] = mat.desc;
+      linhaMat[10] = `=R${fixadorRow}C*${mat.factor}`;
+      
+      formulasPipe.forEach((formula, idx) => {
+        linhaMat[11 + idx] = formula || pipe.originalRow[11 + idx];
+      });
+      
+      linhasParaInserir.push(linhaMat);
+    });
+    
+    sourceSheet.insertRowsAfter(pipe.rowIndex, linhasParaInserir.length);
+    
+    const formatoOrigem = sourceSheet.getRange(pipe.rowIndex, 1, 1, maxCol);
+    formatoOrigem.copyFormatToRange(sourceSheet, 1, maxCol, insertRow, insertRow + linhasParaInserir.length - 1);
+    
+    const rangeDestino = sourceSheet.getRange(insertRow, 1, linhasParaInserir.length, maxCol);
+    rangeDestino.setValues(linhasParaInserir);
+    
     linhasParaInserir.forEach((row, idx) => {
       const currentRow = insertRow + idx;
-      const formulaK = row[COL.QTY];
       
+      const formulaK = row[10];
       if (typeof formulaK === 'string' && formulaK.startsWith('=')) {
-        sourceSheet.getRange(currentRow, COL.QTY + 1).setFormulaR1C1(formulaK);
+        sourceSheet.getRange(currentRow, 11).setFormulaR1C1(formulaK);
+      }
+      
+      for (let col = 11; col <= 15; col++) {
+        const formula = row[col];
+        if (typeof formula === 'string' && formula.startsWith('=')) {
+          sourceSheet.getRange(currentRow, col + 1).setFormulaR1C1(formula);
+        }
       }
     });
     
@@ -1136,8 +1269,7 @@ function testSystem() {
     const msg = [
       `Aba de Origem: ${config[CONFIG.KEYS.SOURCE_SHEET] || 'Não configurada'}`,
       `Linhas: ${sourceSheet ? sourceSheet.getLastRow() - 1 : 0}`,
-      `Relatórios: ${getReportSheetNames().length}`,
-      `Mapeamento: FLOOR=I(9), DESC=J(10), QTY=K(11)`
+      `Relatórios: ${getReportSheetNames().length}`
     ].join('\n');
     
     SpreadsheetApp.getUi().alert('🧪 Diagnóstico', msg, SpreadsheetApp.getUi().ButtonSet.OK);
