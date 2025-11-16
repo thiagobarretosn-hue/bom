@@ -13,8 +13,9 @@
       --bg: #f8f9fa;
       --card: #ffffff;
       --border: #e0e0e0;
+      /* ✅ Estilos para tubos processados */
       --disabled: #3a3a3a;
-      --disabled-text: #888;
+      --disabled-text: #888; 
       --text: #202124;
       --text-light: #5f6368;
     }
@@ -39,207 +40,113 @@
       padding: 16px 20px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
-
-    .header h2 {
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 12px;
-    }
+    .header h2 { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
 
     /* ===== TABS ===== */
     .tabs {
-      display: flex;
-      gap: 8px;
-      background: white;
+      display: flex; gap: 8px; background: white;
       border-bottom: 2px solid var(--border);
-      padding: 0 20px;
-      overflow-x: auto;
+      padding: 0 20px; overflow-x: auto;
     }
-
     .tab {
-      padding: 12px 20px;
-      cursor: pointer;
-      font-weight: 500;
-      color: var(--text-light);
-      border-bottom: 3px solid transparent;
-      transition: all 0.2s;
-      white-space: nowrap;
-      position: relative;
+      padding: 12px 20px; cursor: pointer; font-weight: 500;
+      color: var(--text-light); border-bottom: 3px solid transparent;
+      transition: all 0.2s; white-space: nowrap; position: relative;
     }
-
     .tab:hover { color: var(--primary); }
-    
-    .tab.active {
-      color: var(--primary);
-      border-bottom-color: var(--primary);
-    }
-
+    .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
     .tab-badge {
-      display: inline-block;
-      background: var(--primary);
-      color: white;
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 10px;
-      margin-left: 6px;
-      font-weight: 600;
+      display: inline-block; background: var(--primary); color: white;
+      font-size: 10px; padding: 2px 6px; border-radius: 10px;
+      margin-left: 6px; font-weight: 600;
     }
-
     .tab.active .tab-badge { background: white; color: var(--primary); }
 
     /* ===== FILTERS ===== */
     .filters {
-      background: white;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--border);
-      display: grid;
-      grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
-      gap: 10px;
+      background: white; padding: 16px 20px;
+      border-bottom: 1px solid var(--border); display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 10px;
     }
-
     .filter-input {
-      padding: 8px 12px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 12px;
-      transition: all 0.2s;
-      font-family: inherit;
+      padding: 8px 12px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 12px;
+      transition: all 0.2s; font-family: inherit;
     }
-
     .filter-input:focus {
-      outline: none;
-      border-color: var(--primary);
+      outline: none; border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
     }
-
-    select.filter-input {
-      cursor: pointer;
-      background: white;
-    }
+    select.filter-input { cursor: pointer; background: white; }
 
     /* ===== CONTROLS ===== */
     .controls {
-      display: flex;
-      gap: 8px;
-      padding: 12px 20px;
-      background: white;
-      border-bottom: 1px solid var(--border);
+      display: flex; gap: 8px; padding: 12px 20px;
+      background: white; border-bottom: 1px solid var(--border);
     }
-
     .btn {
-      flex: 1;
-      padding: 10px 16px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 12px;
-      transition: all 0.2s;
-      font-family: inherit;
+      flex: 1; padding: 10px 16px; border: none; border-radius: 6px;
+      cursor: pointer; font-weight: 600; font-size: 12px;
+      transition: all 0.2s; font-family: inherit;
     }
-
-    .btn-primary {
-      background: var(--primary);
-      color: white;
-    }
-
-    .btn-secondary {
-      background: var(--text-light);
-      color: white;
-    }
-
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-secondary { background: var(--text-light); color: white; }
     .btn:hover:not(:disabled) {
-      transform: translateY(-1px);
-      filter: brightness(1.1);
+      transform: translateY(-1px); filter: brightness(1.1);
     }
-
     .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
+      opacity: 0.5; cursor: not-allowed; transform: none;
     }
 
     /* ===== PIPE LIST ===== */
-    .content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-    }
-
-    .pipe-list {
-      display: grid;
-      gap: 12px;
-    }
-
+    .content { flex: 1; overflow-y: auto; padding: 20px; }
+    .pipe-list { display: grid; gap: 12px; }
     .pipe-item {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 14px;
-      display: grid;
-      grid-template-columns: 30px 1fr;
-      gap: 14px;
-      align-items: start;
-      transition: all 0.2s;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 8px; padding: 14px; display: grid;
+      grid-template-columns: 30px 1fr; gap: 14px;
+      align-items: start; transition: all 0.2s;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-
     .pipe-item:hover:not(.disabled) {
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       transform: translateY(-2px);
     }
-
+    
+    /* ✅ CSS que aplica o fundo cinza escuro */
     .pipe-item.disabled {
       background: var(--disabled);
       opacity: 0.6;
     }
 
     .pipe-checkbox {
-      margin-top: 6px;
-      transform: scale(1.3);
-      cursor: pointer;
-      accent-color: var(--primary);
+      margin-top: 6px; transform: scale(1.3);
+      cursor: pointer; accent-color: var(--primary);
     }
-
+    
+    /* ✅ CSS que estiliza o checkbox desabilitado */
     .pipe-checkbox:disabled {
-      cursor: not-allowed;
-      opacity: 0.4;
+      cursor: not-allowed; opacity: 0.4;
     }
 
-    .pipe-info {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
+    .pipe-info { display: flex; flex-direction: column; gap: 8px; }
     .pipe-desc {
-      font-weight: 600;
-      color: var(--text);
-      font-size: 14px;
+      font-weight: 600; color: var(--text); font-size: 14px;
     }
-
+    
+    /* ✅ CSS que aplica o texto cinza claro */
     .pipe-item.disabled .pipe-desc {
       color: var(--disabled-text);
     }
 
-    .pipe-meta {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
+    .pipe-meta { display: flex; gap: 8px; flex-wrap: wrap; }
     .meta-tag {
-      background: #e8f0fe;
-      color: var(--primary);
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      gap: 4px;
+      background: #e8f0fe; color: var(--primary); padding: 4px 10px;
+      border-radius: 12px; font-size: 11px; font-weight: 500;
+      display: flex; align-items: center; gap: 4px;
     }
-
+    
+    /* ✅ CSS para tags em itens desabilitados */
     .pipe-item.disabled .meta-tag {
       background: #4a4a4a;
       color: var(--disabled-text);
@@ -247,72 +154,39 @@
 
     /* ===== EMPTY STATE ===== */
     .empty-state {
-      text-align: center;
-      padding: 60px 20px;
-      color: var(--text-light);
+      text-align: center; padding: 60px 20px; color: var(--text-light);
     }
-
     .empty-state svg {
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
-      opacity: 0.3;
+      width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3;
     }
 
     /* ===== FOOTER ===== */
     .footer {
-      background: white;
-      padding: 16px 20px;
-      border-top: 2px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      background: white; padding: 16px 20px;
+      border-top: 2px solid var(--border); display: flex;
+      justify-content: space-between; align-items: center;
       box-shadow: 0 -2px 8px rgba(0,0,0,0.05);
     }
-
-    .footer-stats {
-      display: flex;
-      gap: 20px;
-      font-size: 12px;
-    }
-
+    .footer-stats { display: flex; gap: 20px; font-size: 12px; }
     .stat {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-weight: 500;
+      display: flex; align-items: center; gap: 6px; font-weight: 500;
     }
-
     .stat-value {
-      background: var(--primary);
-      color: white;
-      padding: 2px 8px;
-      border-radius: 10px;
-      font-weight: 600;
+      background: var(--primary); color: white; padding: 2px 8px;
+      border-radius: 10px; font-weight: 600;
     }
-
     .btn-confirm {
-      background: var(--success);
-      color: white;
-      padding: 12px 32px;
-      font-size: 14px;
-      min-width: 200px;
+      background: var(--success); color: white; padding: 12px 32px;
+      font-size: 14px; min-width: 200px;
     }
 
     /* ===== STATUS ===== */
     .status {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 500;
+      position: fixed; bottom: 20px; right: 20px; padding: 12px 20px;
+      border-radius: 8px; font-size: 12px; font-weight: 500;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      display: none;
-      z-index: 1000;
+      display: none; z-index: 1000;
     }
-
     .status.success { background: var(--success); color: white; }
     .status.error { background: var(--danger); color: white; }
     .status.info { background: var(--primary); color: white; }
@@ -320,20 +194,15 @@
     /* ===== SCROLLBAR ===== */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
-    ::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 4px;
-    }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--text-light); }
   </style>
 </head>
 <body>
-  <!-- HEADER -->
   <div class="header">
     <h2>🔧 Incluir Fixadores</h2>
   </div>
 
-  <!-- TABS -->
   <div class="tabs">
     <div class="tab active" data-filter="all">
       📋 Todos <span class="tab-badge" id="badge-all">0</span>
@@ -349,7 +218,6 @@
     </div>
   </div>
 
-  <!-- FILTERS -->
   <div class="filters">
     <input type="text" 
            class="filter-input" 
@@ -369,7 +237,6 @@
     </select>
   </div>
 
-  <!-- CONTROLS -->
   <div class="controls">
     <button class="btn btn-primary" onclick="toggleAll(true)">
       ✅ Selecionar Disponíveis
@@ -379,12 +246,11 @@
     </button>
   </div>
 
-  <!-- CONTENT -->
   <div class="content">
     <div class="pipe-list" id="pipeList"></div>
   </div>
 
-  <!-- FOOTER -->
+  
   <div class="footer">
     <div class="footer-stats">
       <div class="stat">
@@ -398,11 +264,10 @@
       </div>
     </div>
     <button class="btn btn-confirm" id="btnConfirm" onclick="confirmarFixadores()" disabled>
-      Inserir Fixadores
+     Inserir Fixadores
     </button>
   </div>
 
-  <!-- STATUS -->
   <div id="status" class="status"></div>
 
   <script>
@@ -412,17 +277,27 @@
 
     // ===== INICIALIZAÇÃO =====
     window.addEventListener('load', () => {
+      // Chama a função de carregamento imediatamente
+      loadPipeData();
+    });
+
+    function loadPipeData() {
+      showStatus('Carregando tubos...', 'info');
       google.script.run
         .withSuccessHandler(initializePipes)
         .withFailureHandler(err => showStatus(`❌ ${err.message}`, 'error'))
         .getPipesElegiveis();
-    });
+    }
 
     function initializePipes(pipes) {
       allPipes = pipes || [];
+      // Oculta o status de carregamento
+      const status = document.getElementById('status');
+      if (status.textContent.includes('Carregando')) {
+          status.style.display = 'none';
+      }
       populateFilters();
-      applyFilters();
-      updateStats();
+      applyFilters(); // Isso renderiza e atualiza estatísticas
     }
 
     // ===== FILTROS =====
@@ -431,19 +306,19 @@
       const trades = new Set();
       const floors = new Set();
       const diameters = new Set();
-
+      
       allPipes.forEach(pipe => {
         if (pipe.section) sections.add(pipe.section);
         if (pipe.trade) trades.add(pipe.trade);
         if (pipe.floor) floors.add(pipe.floor);
         if (pipe.diameter) diameters.add(pipe.diameter);
       });
-
+      
       populateSelect('filterSection', sections, '📍');
       populateSelect('filterTrade', trades, '🏗️');
       populateSelect('filterFloor', floors, '📐');
       populateSelect('filterDiameter', diameters, '🧿');
-
+      
       // Event listeners
       ['searchBox', 'filterSection', 'filterTrade', 'filterFloor', 'filterDiameter']
         .forEach(id => {
@@ -453,13 +328,16 @@
 
     function populateSelect(selectId, values, icon) {
       const select = document.getElementById(selectId);
+      // Limpa opções antigas, exceto a primeira (placeholder)
+      select.options.length = 1; 
+      
       const sorted = [...values].sort((a, b) => {
         const aNum = parseFloat(a);
         const bNum = parseFloat(b);
         if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
         return String(a).localeCompare(String(b));
       });
-
+      
       sorted.forEach(value => {
         const option = document.createElement('option');
         option.value = value;
@@ -474,25 +352,25 @@
       const trade = document.getElementById('filterTrade').value;
       const floor = document.getElementById('filterFloor').value;
       const diameter = document.getElementById('filterDiameter').value;
-
+      
       filteredPipes = allPipes.filter(pipe => {
         // Tab filter
-        if (currentTab === 'riser' && !pipe.desc.toUpperCase().includes('RISER')) return false;
-        if (currentTab === 'colgante' && !pipe.desc.toUpperCase().includes('COLGANTE')) return false;
+        if (currentTab === 'riser' && !pipe.isRiser) return false;
+        if (currentTab === 'colgante' && pipe.isRiser) return false;
         if (currentTab === 'processed' && !pipe.jaTemFixador) return false;
 
         // Other filters
         if (search && !pipe.desc.toLowerCase().includes(search)) return false;
         if (section && pipe.section !== section) return false;
-        if (trade && pipe.trade !== trade) return false;
+        // Filtro de Trade deve ignorar 'FIX' para não esconder o tubo original
+        if (trade && pipe.trade !== trade) return false; 
         if (floor && pipe.floor !== floor) return false;
         if (diameter && pipe.diameter !== diameter) return false;
 
         return true;
       });
-
       renderPipes();
-      updateStats();
+      updateStats(); // Atualiza contagens
     }
 
     // ===== TABS =====
@@ -504,11 +382,10 @@
         applyFilters();
       });
     });
-
+    
     // ===== RENDERIZAÇÃO =====
     function renderPipes() {
       const container = document.getElementById('pipeList');
-
       if (filteredPipes.length === 0) {
         container.innerHTML = `
           <div class="empty-state">
@@ -523,6 +400,8 @@
 
       container.innerHTML = filteredPipes.map((pipe, idx) => {
         const globalIdx = allPipes.indexOf(pipe);
+        
+        // ✅ Esta é a lógica que você queria
         const disabled = pipe.jaTemFixador;
         const disabledClass = disabled ? 'disabled' : '';
         const disabledAttr = disabled ? 'disabled' : '';
@@ -543,7 +422,8 @@
                 <span class="meta-tag">🏗️ ${pipe.trade}</span>
                 <span class="meta-tag">📐 ${pipe.floor}</span>
                 <span class="meta-tag">🏢 ${pipe.unitType}</span>
-                ${pipe.diameter ? `<span class="meta-tag">🧿 ⌀ ${pipe.diameter}"</span>` : ''}
+                ${pipe.diameter ?
+                `<span class="meta-tag">🧿 ⌀ ${pipe.diameter}"</span>` : ''}
                 <span class="meta-tag">📏 ${pipe.qty} ${pipe.uom}</span>
               </div>
             </label>
@@ -555,23 +435,27 @@
     // ===== SELEÇÃO =====
     function toggleAll(checked) {
       document.querySelectorAll('.pipe-checkbox:not([disabled])').forEach(cb => {
-        cb.checked = checked;
+         cb.checked = checked;
       });
       updateStats();
     }
 
     function updateStats() {
+      // Contagem de selecionados (apenas os marcados e disponíveis)
       const selected = document.querySelectorAll('.pipe-checkbox:checked').length;
+      
+      // Contagens globais (baseadas em 'allPipes' para precisão)
       const available = allPipes.filter(p => !p.jaTemFixador).length;
       const processed = allPipes.filter(p => p.jaTemFixador).length;
+      const riser = allPipes.filter(p => p.isRiser).length;
+      const colgante = allPipes.filter(p => !p.isRiser).length;
 
-      const riser = allPipes.filter(p => p.desc.toUpperCase().includes('RISER')).length;
-      const colgante = allPipes.filter(p => p.desc.toUpperCase().includes('COLGANTE')).length;
-
+      // Atualiza o footer
       document.getElementById('selectedCount').textContent = selected;
       document.getElementById('availableCount').textContent = available;
       document.getElementById('processedCount').textContent = processed;
 
+      // Atualiza os badges das TABS
       document.getElementById('badge-all').textContent = allPipes.length;
       document.getElementById('badge-riser').textContent = riser;
       document.getElementById('badge-colgante').textContent = colgante;
@@ -589,17 +473,24 @@
         const idx = parseInt(cb.dataset.index);
         selected.push(allPipes[idx]);
       });
-
+      
       if (selected.length === 0) return;
 
       showStatus(`Processando ${selected.length} tubo(s)...`, 'info');
       document.getElementById('btnConfirm').disabled = true;
-
+      
       google.script.run
         .withSuccessHandler(result => {
           if (result.success) {
-            showStatus(`✅ ${result.added} linhas inseridas!`, 'success');
-            setTimeout(() => google.script.host.close(), 2000);
+            showStatus(`✅ ${result.added} linhas inseridas! Atualizando...`, 'success');
+            
+            // *** MUDANÇA: NÃO FECHAR, RECARREGAR OS DADOS ***
+            // Isso chama initializePipes novamente com os dados atualizados
+            google.script.run
+              .withSuccessHandler(initializePipes)
+              .withFailureHandler(err => showStatus(`❌ ${err.message}`, 'error'))
+              .getPipesElegiveis();
+
           } else {
             showStatus(`❌ ${result.message}`, 'error');
             document.getElementById('btnConfirm').disabled = false;
@@ -618,7 +509,11 @@
       status.textContent = msg;
       status.className = `status ${type}`;
       status.style.display = 'block';
-      setTimeout(() => status.style.display = 'none', 4000);
+      
+      // Ocultar automaticamente apenas se não for 'info'
+      if (type !== 'info') {
+        setTimeout(() => status.style.display = 'none', 4000);
+      }
     }
   </script>
 </body>
