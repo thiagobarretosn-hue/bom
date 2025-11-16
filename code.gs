@@ -1,7 +1,15 @@
 /**
  * @OnlyCurrentDoc
  * SISTEMA UNIFICADO DE RELATÓRIOS DINÂMICOS + FIXADORES
- * Versão 2.1 - Corrigida e Otimizada
+ * Versão 2.3 - Correção de Fixadores e Sidebar
+ *
+ * CORREÇÕES:
+ * 1. (FIXADORES) `getPipesElegiveis` agora deteta tubos processados (Trade 'FIX' 
+ * na linha seguinte) e envia a propriedade 'jaTemFixador' para o HTML.
+ * 2. (UX) `abrirSeletorFixadores` agora usa `showSidebar` (não-modal) em vez 
+ * de `showModalDialog` (modal).
+ * 3. (BOM) Mantém todas as correções anteriores (Classificação Avançada, 
+ * colunas J-DESC, O-PROJECT, etc.).
  */
 
 // ============================================================================
@@ -143,7 +151,6 @@ const Utils = {
       /PIPE\s+(\d+)\s+IN/i,
       /PIPE\s+(\d+-\d+\/\d+)\s+IN/i
     ];
-    
     for (const pattern of patterns) {
       const match = desc.match(pattern);
       if (match) {
@@ -192,6 +199,27 @@ const CacheManager = {
       'all_config_values',
       'unique_values'
     ]);
+    // Limpa chaves de cache de coluna únicas
+    const config = ConfigService.getAll();
+    const sourceSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
+    if (sourceSheet) {
+        const sourceSheetId = sourceSheet.getSheetId();
+        const groupConfigs = [
+            config[CONFIG.KEYS.GROUP_L1],
+            config[CONFIG.KEYS.GROUP_L2],
+            config[CONFIG.KEYS.GROUP_L3]
+        ].filter(Boolean);
+        const cacheKeysToRemove = groupConfigs.map(conf => {
+            const colIndex = Utils.getColumnIndex(conf);
+            if (colIndex !== -1) {
+                return `unique_${sourceSheetId}_${colIndex}`;
+            }
+            return null;
+        }).filter(Boolean);
+        if (cacheKeysToRemove.length > 0) {
+            CacheManager._cache.removeAll(cacheKeysToRemove);
+        }
+    }
   }
 };
 
@@ -214,7 +242,6 @@ const ConfigService = {
       const key = String(row[0]).trim();
       if (key && !key.startsWith(' ')) config[key] = row[1];
     });
-
     CacheManager.put('all_config_values', config);
     return config;
   },
@@ -241,7 +268,8 @@ function forceCreateConfig() {
   
   configSheet = ss.insertSheet(CONFIG.SHEETS.CONFIG, 0);
   configSheet.clear();
-
+  
+  // Valores padrão corrigidos para a nova estrutura de colunas
   const configData = [
     ['CONFIGURAÇÃO', 'VALOR', 'DESCRIÇÃO'],
     ['', '', ''],
@@ -252,11 +280,11 @@ function forceCreateConfig() {
     [CONFIG.KEYS.GROUP_L3, '', 'Terceiro nível (opcional)'],
     ['', '', ''],
     [' 📋 DADOS BOMS', '', 'Mapeamento das colunas'],
-    [CONFIG.KEYS.COL_1, '', 'ID ou identificador'],
-    [CONFIG.KEYS.COL_2, 'I - DESC', 'Descrição do item'],
-    [CONFIG.KEYS.COL_3, 'L - UPC', 'Código de barras'],
-    [CONFIG.KEYS.COL_4, 'K - UOM', 'Unidade de medida'],
-    [CONFIG.KEYS.COL_5, 'N - PROJECT', 'Quantidade'],
+    [CONFIG.KEYS.COL_1, 'D - UNIT ID', 'ID ou identificador (ex: D - UNIT ID)'],
+    [CONFIG.KEYS.COL_2, 'J - DESC', 'Descrição do item (ex: J - DESC)'],
+    [CONFIG.KEYS.COL_3, 'M - UPC', 'Código de barras (ex: M - UPC)'],
+    [CONFIG.KEYS.COL_4, 'L - UOM', 'Unidade de medida (ex: L - UOM)'],
+    [CONFIG.KEYS.COL_5, 'O - PROJECT', 'Quantidade (ex: O - PROJECT)'],
     ['', '', ''],
     [' 🏷️ CABEÇALHO', '', 'Informações do relatório'],
     [CONFIG.KEYS.PROJECT, 'HG1 BE', 'Nome do projeto'],
@@ -266,7 +294,7 @@ function forceCreateConfig() {
     [CONFIG.KEYS.VERSION, '', 'Versão (ex: 01, 02)'],
     ['', '', ''],
     [' ⚙️ OPÇÕES', '', 'Classificação dos dados'],
-    [CONFIG.KEYS.SORT_BY, 'Coluna 2', 'Coluna para classificar'],
+    [CONFIG.KEYS.SORT_BY, 'J - DESC', 'Coluna da Aba Origem para classificar'],
     [CONFIG.KEYS.SORT_ORDER, 'Ascendente (A-Z, 0-9)', 'Ordem de classificação'],
     ['', '', ''],
     [' 💾 SALVAMENTO', '', 'Exportação de PDFs'],
@@ -274,7 +302,7 @@ function forceCreateConfig() {
     [CONFIG.KEYS.DRIVE_FOLDER_NAME, '', 'Nome da pasta'],
     [CONFIG.KEYS.PDF_PREFIX, 'HG1.PLB.RGH.JS.BE.UNT.RISER', 'Prefixo dos PDFs']
   ];
-
+  
   configSheet.getRange(1, 1, configData.length, 3).setValues(configData);
   
   // Formatação
@@ -285,7 +313,6 @@ function forceCreateConfig() {
     .setFontColor(s.FONT_DARK);
   
   configSheet.setColumnWidth(1, 220).setColumnWidth(2, 300).setColumnWidth(3, 350);
-  
   configSheet.getRange('A1:C1').merge()
     .setValue('⚙️ PAINEL DE CONFIGURAÇÃO | RELATÓRIOS DINÂMICOS')
     .setBackground(s.HEADER_BG)
@@ -293,7 +320,7 @@ function forceCreateConfig() {
     .setFontSize(14)
     .setFontWeight('bold')
     .setHorizontalAlignment('center');
-
+  
   const sections = {
     3: { endRow: 7 },
     9: { endRow: 14 },
@@ -301,18 +328,16 @@ function forceCreateConfig() {
     23: { endRow: 25 },
     27: { endRow: 30 }
   };
-
+  
   for (const startRow in sections) {
     const start = parseInt(startRow);
     const endRow = sections[startRow].endRow;
-    
     configSheet.getRange(start, 1, 1, 3).merge()
       .setBackground(s.SECTION_BG)
       .setFontColor(s.FONT_LIGHT)
       .setFontSize(11)
       .setFontWeight('bold')
       .setHorizontalAlignment('left');
-    
     configSheet.setRowHeight(start, 30);
     
     for (let r = start + 1; r <= endRow; r++) {
@@ -326,7 +351,7 @@ function forceCreateConfig() {
       .setBorder(true, true, true, true, null, null, s.BORDER, SpreadsheetApp.BorderStyle.SOLID);
   }
   
-  configSheet.getRange(21, 2).setNumberFormat('@STRING@');
+  configSheet.getRange(21, 2).setNumberFormat('@STRING@'); // Linha da Versão
   configSheet.setFrozenRows(1);
   
   // Painel de pré-visualização
@@ -338,7 +363,6 @@ function forceCreateConfig() {
     .setFontWeight('bold')
     .setHorizontalAlignment('center')
     .setFontFamily(s.FONT_FAMILY);
-  
   configSheet.setRowHeight(1, 40);
 
   SpreadsheetApp.flush();
@@ -350,14 +374,12 @@ function updateConfigDropdowns() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const configSheet = ss.getSheetByName(CONFIG.SHEETS.CONFIG);
   if (!configSheet) return;
-  
   const config = ConfigService.getAll();
 
   // Dropdown Aba Origem
   const sourceSheets = ss.getSheets()
     .map(s => s.getName())
     .filter(n => n !== CONFIG.SHEETS.CONFIG);
-  
   if (sourceSheets.length > 0) {
     configSheet.getRange('B4').setDataValidation(
       SpreadsheetApp.newDataValidation()
@@ -370,32 +392,27 @@ function updateConfigDropdowns() {
   const sourceSheet = ss.getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
   if (!sourceSheet || sourceSheet.getLastColumn() === 0) return;
   
-  // Dropdowns de colunas
+  // Dropdowns de colunas (com todas as opções)
   const headers = sourceSheet.getRange(1, 1, 1, sourceSheet.getLastColumn()).getValues()[0];
   const columnOptions = headers.map((h, i) => 
     `${String.fromCharCode(65 + i)} - ${h || `Coluna ${String.fromCharCode(65 + i)}`}`
   );
-  
   const columnRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(columnOptions, true)
     .setAllowInvalid(false)
     .build();
-  
+    
+  // Linhas para aplicar a regra de coluna
   [5, 6, 7, 10, 11, 12, 13, 14].forEach(row => 
     configSheet.getRange(row, 2).setDataValidation(columnRule)
   );
 
-  // Dropdowns de classificação
-  const sortColumnOptions = ['Coluna 1', 'Coluna 2', 'Coluna 3', 'Coluna 4', 'Coluna 5'];
-  configSheet.getRange(24, 2).setDataValidation(
-    SpreadsheetApp.newDataValidation()
-      .requireValueInList(sortColumnOptions, true)
-      .setAllowInvalid(false)
-      .build()
-  );
+  // Dropdown de classificação avançada
+  configSheet.getRange(24, 2).setDataValidation(columnRule); // Linha 24 é 'CLASSIFICAR POR'
 
+  // Dropdown de Ordem de Classificação
   const sortOrderOptions = ['Ascendente (A-Z, 0-9)', 'Descendente (Z-A, 9-0)'];
-  configSheet.getRange(25, 2).setDataValidation(
+  configSheet.getRange(25, 2).setDataValidation( // Linha 25 é 'ORDEM'
     SpreadsheetApp.newDataValidation()
       .requireValueInList(sortOrderOptions, true)
       .setAllowInvalid(false)
@@ -427,17 +444,14 @@ function updateSingleLevelPanel(level, config, sourceSheet) {
   configSheet.setColumnWidth(startCol, 150).setColumnWidth(startCol + 1, 50);
   
   const headerRange = configSheet.getRange(3, startCol, 1, 2).merge();
-  
   if (sourceSheet && groupConfig && groupConfig.trim() !== '') {
     const colIndex = Utils.getColumnIndex(groupConfig);
-    
     if (colIndex === -1) {
       headerRange.setValue(`${levelId}: ERRO`)
         .setBackground(CONFIG.COLORS.PANEL_ERROR_BG)
         .setFontColor(CONFIG.COLORS.FONT_LIGHT)
         .setFontWeight('bold')
         .setHorizontalAlignment('center');
-      
       configSheet.getRange(4, startCol)
         .setValue('Config. inválida.')
         .setFontColor(CONFIG.COLORS.FONT_SUBTLE)
@@ -449,7 +463,6 @@ function updateSingleLevelPanel(level, config, sourceSheet) {
         .setFontColor(CONFIG.COLORS.FONT_LIGHT)
         .setFontWeight('bold')
         .setHorizontalAlignment('center');
-      
       const uniqueValues = getUniqueColumnValues(sourceSheet, colIndex);
       
       if (uniqueValues.length > 0) {
@@ -464,7 +477,6 @@ function updateSingleLevelPanel(level, config, sourceSheet) {
       .setFontColor(CONFIG.COLORS.FONT_LIGHT)
       .setFontWeight('bold')
       .setHorizontalAlignment('center');
-    
     const message = sourceSheet ? '(Não configurado)' : '(Selecione Aba Origem)';
     configSheet.getRange(4, startCol)
       .setValue(message)
@@ -475,7 +487,6 @@ function updateSingleLevelPanel(level, config, sourceSheet) {
   const lastRowInPanel = configSheet.getRange(configSheet.getMaxRows(), startCol)
     .getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
   const effectiveLastRow = Math.max(3, lastRowInPanel);
-  
   configSheet.getRange(3, startCol, effectiveLastRow - 2, 2)
     .setBorder(true, true, true, true, true, true, CONFIG.COLORS.BORDER, SpreadsheetApp.BorderStyle.SOLID);
 }
@@ -498,7 +509,6 @@ function getUniqueColumnValues(sheet, columnIndex) {
 
 function getPanelSelections(sheet) {
   const selections = {};
-  
   for (let i = 0; i < 3; i++) {
     const startCol = 5 + (i * 2);
     const headerRange = sheet.getRange(3, startCol);
@@ -512,12 +522,10 @@ function getPanelSelections(sheet) {
       const numItems = lastDataRow - 3;
       const values = sheet.getRange(4, startCol, numItems, 1).getValues().flat();
       const checkboxes = sheet.getRange(4, startCol + 1, numItems, 1).getValues().flat();
-      
       const selectedValues = values
         .map((v, index) => ({ value: v, checked: checkboxes[index] }))
         .filter(item => item.checked === true)
         .map(item => item.value ?? '');
-      
       selections[levelId] = new Set(selectedValues);
     } else {
       selections[levelId] = new Set();
@@ -537,7 +545,6 @@ function updatePreviewPanel(previewStartCol) {
   
   const combinations = getSelectedCombinations();
   const existingSuffixes = new Map();
-  
   const lastPreviewRow = configSheet.getRange(configSheet.getMaxRows(), previewStartCol)
     .getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
   
@@ -549,7 +556,6 @@ function updatePreviewPanel(previewStartCol) {
   }
   
   configSheet.getRange(3, previewStartCol, configSheet.getMaxRows() - 2, 4).clear();
-
   configSheet.getRange(3, previewStartCol, 1, 3)
     .setValues([['COMBINAÇÃO GERADA', 'CRIAR?', 'SUFIXO KOJO FINAL']])
     .setBackground(CONFIG.COLORS.HEADER_BG)
@@ -562,7 +568,6 @@ function updatePreviewPanel(previewStartCol) {
       const kojoSuffix = existingSuffixes.get(combo) || displayCombo;
       return [displayCombo, true, kojoSuffix, combo];
     });
-    
     configSheet.getRange(4, previewStartCol, tableData.length, 4).setValues(tableData);
     configSheet.getRange(4, previewStartCol + 1, tableData.length, 1).insertCheckboxes();
     configSheet.getRange(4, previewStartCol + 2, tableData.length, 1).setBackground(CONFIG.COLORS.INPUT_BG);
@@ -576,10 +581,8 @@ function updatePreviewPanel(previewStartCol) {
   const lastCombinationRow = configSheet.getRange(configSheet.getMaxRows(), previewStartCol)
     .getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
   const effectiveLastRow = Math.max(3, lastCombinationRow);
-  
   configSheet.getRange(3, previewStartCol, effectiveLastRow - 2, 3)
     .setBorder(true, true, true, true, true, true, CONFIG.COLORS.BORDER, SpreadsheetApp.BorderStyle.SOLID);
-  
   ss.toast('Pré-visualização atualizada!', 'Sucesso', 3);
 }
 
@@ -587,7 +590,6 @@ function getSelectedCombinations() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const configSheet = ss.getSheetByName(CONFIG.SHEETS.CONFIG);
   const config = ConfigService.getAll();
-  
   const sourceSheet = ss.getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
   if (!sourceSheet) return [];
   
@@ -596,7 +598,6 @@ function getSelectedCombinations() {
     config[CONFIG.KEYS.GROUP_L2],
     config[CONFIG.KEYS.GROUP_L3]
   ].filter(Boolean);
-  
   if (groupConfigs.length === 0) return [];
 
   const groupIndices = groupConfigs.map(Utils.getColumnIndex);
@@ -619,7 +620,7 @@ function getSelectedCombinations() {
       existingCombinations.add(combinationParts.join(CONFIG.DELIMITER));
     }
   });
-
+  
   const finalCombinations = [...existingCombinations].filter(combo => {
     const parts = combo.split(CONFIG.DELIMITER);
     return parts.every((part, i) => {
@@ -630,7 +631,7 @@ function getSelectedCombinations() {
         .some(selected => String(selected).trim() === String(part).trim());
     });
   });
-
+  
   return finalCombinations.sort((a, b) => {
     const aParts = a.split(CONFIG.DELIMITER);
     const bParts = b.split(CONFIG.DELIMITER);
@@ -642,7 +643,7 @@ function getSelectedCombinations() {
       if (!isNaN(aNum) && !isNaN(bNum)) {
         if (aNum !== bNum) return aNum - bNum;
       } else {
-        const comparison = aParts[i].localeCompare(bParts[i], undefined, { numeric: true });
+         const comparison = aParts[i].localeCompare(bParts[i], undefined, { numeric: true });
         if (comparison !== 0) return comparison;
       }
     }
@@ -651,7 +652,7 @@ function getSelectedCombinations() {
 }
 
 // ============================================================================
-// PROCESSAMENTO DE RELATÓRIOS
+// PROCESSAMENTO DE RELATÓRIOS (BOM)
 // ============================================================================
 
 function runProcessing() {
@@ -692,7 +693,6 @@ function runProcessing() {
     config[CONFIG.KEYS.GROUP_L2],
     config[CONFIG.KEYS.GROUP_L3]
   ].filter(Boolean);
-  
   const groupIndices = groupConfigs.map(Utils.getColumnIndex);
   
   const bomCols = {
@@ -703,19 +703,17 @@ function runProcessing() {
     c5: Utils.getColumnIndex(config[CONFIG.KEYS.COL_5])
   };
 
-  // Configuração de classificação
-  const sortColumnKey = config[CONFIG.KEYS.SORT_BY] || 'Coluna 2';
-  const bomKeyToIndex = {
-    'Coluna 1': 0, 'Coluna 2': 1, 'Coluna 3': 2, 'Coluna 4': 3, 'Coluna 5': 4
-  };
-  const sortIndex = bomKeyToIndex[sortColumnKey] ?? 1;
+  // Lógica de Classificação Avançada
+  const sortColumnConfig = config[CONFIG.KEYS.SORT_BY] || config[CONFIG.KEYS.COL_2];
+  const sortColumnIndex = Utils.getColumnIndex(sortColumnConfig) - 1; // Índice 0-based
   const sortOrder = config[CONFIG.KEYS.SORT_ORDER] === 'Descendente (Z-A, 9-0)' ? 'desc' : 'asc';
   
-  const sortConfig = { sortIndex, sortOrder };
+  if(sortColumnIndex < 0) {
+    return { success: false, message: `Coluna de classificação "${sortColumnConfig}" inválida.` };
+  }
 
   const dataMap = new Map();
   combinationsToProcess.forEach(item => dataMap.set(item.combination, []));
-
   const allData = sourceSheet.getRange(2, 1, sourceSheet.getLastRow() - 1, sourceSheet.getLastColumn()).getValues();
   
   for (const row of allData) {
@@ -724,24 +722,26 @@ function runProcessing() {
       .join(CONFIG.DELIMITER);
     
     if (dataMap.has(rowCombination)) {
+      // Adiciona o valor de classificação como um 6º elemento "oculto"
       dataMap.get(rowCombination).push([
         row[bomCols.c1 - 1],
         row[bomCols.c2 - 1],
         row[bomCols.c3 - 1],
         row[bomCols.c4 - 1],
-        parseFloat(row[bomCols.c5 - 1]) || 0
+        parseFloat(row[bomCols.c5 - 1]) || 0,
+        row[sortColumnIndex] // Valor para classificação
       ]);
     }
   }
   
   let createdCount = 0;
-  
   combinationsToProcess.forEach(item => {
     const { displayCombination, combination, kojoSuffix } = item;
     const rawData = dataMap.get(combination);
     if (!rawData || rawData.length === 0) return;
     
-    const processedData = groupAndSumData(rawData, sortConfig);
+    const processedData = groupAndSumData(rawData, sortOrder);
+    
     const sanitizedName = Utils.sanitizeSheetName(displayCombination);
     
     let targetSheet = ss.getSheetByName(sanitizedName);
@@ -758,25 +758,28 @@ function runProcessing() {
   return { success: true, created: createdCount };
 }
 
-function groupAndSumData(data, sortConfig) {
+/**
+ * Agrupa, classifica pelo 6º elemento (oculto) e depois o remove.
+ */
+function groupAndSumData(data, sortOrder) {
   const grouped = {};
   
   data.forEach(row => {
-    const key = `${row[0]}|${row[1]}|${row[2]}|${row[3]}`;
+    const key = `${row[0]}|${row[1]}|${row[2]}|${row[3]}`; 
     if (grouped[key]) {
-      grouped[key][4] += row[4];
+      grouped[key][4] += row[4]; // Soma a quantidade
     } else {
-      grouped[key] = [...row];
+      grouped[key] = [...row]; // Guarda a linha inteira (6 elementos)
     }
   });
-
+  
   const groupedData = Object.values(grouped);
-  const { sortIndex, sortOrder } = sortConfig;
   const direction = sortOrder === 'asc' ? 1 : -1;
 
+  // Ordena com base no 6º elemento (índice 5)
   groupedData.sort((a, b) => {
-    const valA = a[sortIndex];
-    const valB = b[sortIndex];
+    const valA = a[5];
+    const valB = b[5];
 
     if (valA === null || valA === undefined || valA === '') return 1;
     if (valB === null || valB === undefined || valB === '') return -1;
@@ -791,12 +794,13 @@ function groupAndSumData(data, sortConfig) {
     return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * direction;
   });
   
-  return groupedData;
+  // Remove o 6º elemento antes de retornar
+  return groupedData.map(row => row.slice(0, 5));
 }
+
 
 function createAndFormatReport(sheet, combination, kojoSuffix, data) {
   const config = ConfigService.getAll();
-  
   const reportConfig = {
     project: config[CONFIG.KEYS.PROJECT],
     bom: config[CONFIG.KEYS.BOM],
@@ -804,7 +808,6 @@ function createAndFormatReport(sheet, combination, kojoSuffix, data) {
     engineer: config[CONFIG.KEYS.ENGINEER],
     version: config[CONFIG.KEYS.VERSION]
   };
-  
   const headers = {
     h1: Utils.getColumnHeader(config[CONFIG.KEYS.COL_1]),
     h2: Utils.getColumnHeader(config[CONFIG.KEYS.COL_2]),
@@ -812,13 +815,12 @@ function createAndFormatReport(sheet, combination, kojoSuffix, data) {
     h4: Utils.getColumnHeader(config[CONFIG.KEYS.COL_4]),
     h5: 'QTY'
   };
-
+  
   const lastUpdate = Utilities.formatDate(
     new Date(),
     SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(),
     'MM/dd/yyyy'
   );
-  
   const bomKojoComplete = `${reportConfig.kojoPrefix}.${kojoSuffix}`;
   
   const headerValues = [
@@ -847,13 +849,13 @@ function createAndFormatReport(sheet, combination, kojoSuffix, data) {
   sheet.getRange(dataStartRow, 1, finalData.length, 5)
     .applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, true, false);
   sheet.getRange(dataStartRow, 1, 1, 5).setFontWeight('bold');
-
+  
   sheet.setColumnWidth(1, 105)
     .setColumnWidth(2, 570)
     .setColumnWidth(3, 105)
     .setColumnWidth(4, 105)
     .setColumnWidth(5, 105);
-
+  
   try {
     const protection = sheet.getRange(1, 1, dataStartRow - 1, 5).protect();
     protection.setDescription('Cabeçalho protegido');
@@ -870,7 +872,6 @@ function clearOldReports() {
     'Apagar TODAS as abas de relatório?',
     ui.ButtonSet.YES_NO
   );
-  
   if (response !== ui.Button.YES) return;
   
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -884,7 +885,6 @@ function clearOldReports() {
       deletedCount++;
     }
   });
-  
   ui.alert('Limpeza Concluída', `${deletedCount} abas removidas.`, ui.ButtonSet.OK);
 }
 
@@ -892,20 +892,30 @@ function clearOldReports() {
 // FIXADORES
 // ============================================================================
 
+/**
+ * *** CORRIGIDO: Esta função agora usa showSidebar (não-modal) ***
+ */
+/**
+ * *** VERSÃO 2.4: Esta função agora usa showModelessDialog (não-modal) ***
+ * Ela abre um pop-up flutuante que não trava a planilha.
+ */
 function abrirSeletorFixadores() {
-  const html = HtmlService.createHtmlOutputFromFile('FixadorSelector')
-    .setWidth(900)
-    .setHeight(800)
-    .setTitle('Seletor de Fixadores');
+  const html = HtmlService.createHtmlOutputFromFile('FixadoresSidebar')
+    .setTitle('Seletor de Fixadores')
+    .setWidth(900)  // Definimos a largura
+    .setHeight(800); // Definimos a altura
   
-  SpreadsheetApp.getUi().showModalDialog(html, 'Seleção de Tubos');
+  // MUDANÇA: De "showSidebar" para "showModelessDialog"
+  SpreadsheetApp.getUi().showModelessDialog(html, 'Seletor de Fixadores');
 }
 
+/**
+ * *** CORRIGIDO: Esta função agora deteta tubos processados ***
+ */
 function getPipesElegiveis() {
   const config = ConfigService.getAll();
   const sourceSheet = SpreadsheetApp.getActiveSpreadsheet()
     .getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
-  
   if (!sourceSheet) return [];
   
   const lastRow = sourceSheet.getLastRow();
@@ -915,10 +925,11 @@ function getPipesElegiveis() {
   const pipes = [];
   
   data.forEach((row, idx) => {
-    // Mapeamento: A=PROJECT, B=SECTION, C=QTT, D=UNIT_ID, E=UNIT_TYPE, F=LOCAL, G=TRADE, H=PHASE, I=FLOOR, J=DESC, K=QTY
-    const section = String(row[1] || '');
-    const desc = String(row[9] || '');
-    const qty = parseFloat(row[10]) || 0;
+    // Mapeamento (0-indexed): B=1, J=9, K=10, L=11, G=6
+    const section = String(row[1] || ''); // Col B
+    const desc = String(row[9] || '');    // Col J
+    const qty = parseFloat(row[10]) || 0; // Col K
+    const uom = String(row[11] || '');    // Col L
     
     if (validarTipoFixacao(section) && desc.toUpperCase().includes('PIPE') && qty > 0) {
       const diameter = Utils.extractDiameter(desc);
@@ -927,20 +938,35 @@ function getPipesElegiveis() {
       const itemMap = isRiser ? fixConfig.clamps : fixConfig.hangs;
       
       if (diameter && itemMap[diameter]) {
+        
+        // --- INÍCIO DA CORREÇÃO ---
+        // Verifica se o tubo já foi processado olhando para a próxima linha
+        let jaTemFixador = false;
+        if (idx + 1 < data.length) { // Verifica se existe uma próxima linha
+          const nextRow = data[idx + 1];
+          const nextRowTrade = String(nextRow[6] || '').toUpperCase(); // Col G (TRADE)
+          if (nextRowTrade === 'FIX') {
+            jaTemFixador = true;
+          }
+        }
+        // --- FIM DA CORREÇÃO ---
+
         pipes.push({
           rowIndex: idx + 2,
-          section: row[1],
-          unitType: row[4],
-          local: row[5],
-          trade: row[6],
-          phase: row[7],
-          unitid: row[3],
-          desc: desc,
-          qty: qty,
-          uom: row[11],
+          section: row[1],  // B
+          unitType: row[4], // E
+          local: row[5],    // F
+          trade: row[6],    // G
+          phase: row[7],    // H
+          floor: row[8],    // I
+          unitid: row[3],   // D
+          desc: desc,       // J
+          qty: qty,         // K
+          uom: uom,         // L
           diameter: diameter,
           isRiser: isRiser,
-          originalRow: [...row]
+          originalRow: [...row],
+          jaTemFixador: jaTemFixador // <-- Propriedade ADICIONADA
         });
       }
     }
@@ -975,26 +1001,32 @@ function processarFixadoresSelecionados(selectedPipes) {
     
     if (!fixadorItem) return;
     
-    const formulasPipe = sourceSheet.getRange(pipe.rowIndex, 12, 1, 5).getFormulasR1C1()[0];
+    const formulaStartCol = 12; // Coluna L
+    const numFormulaCols = 5; // L, M, N, O, P
+    
+    const formulasPipe = sourceSheet.getRange(pipe.rowIndex, formulaStartCol, 1, numFormulaCols).getFormulasR1C1()[0];
     const linhasParaInserir = [];
     const insertRow = pipe.rowIndex + 1;
     
     // Linha do fixador
     const linhaFixador = new Array(maxCol).fill('');
-    linhaFixador[0] = pipe.originalRow[0];
-    linhaFixador[1] = pipe.originalRow[1];
-    linhaFixador[2] = pipe.originalRow[2];
-    linhaFixador[3] = pipe.originalRow[3];
-    linhaFixador[4] = pipe.originalRow[4];
-    linhaFixador[5] = pipe.originalRow[5];
-    linhaFixador[6] = 'FIX';
-    linhaFixador[7] = pipe.originalRow[7];
-    linhaFixador[8] = pipe.originalRow[8];
-    linhaFixador[9] = fixadorItem;
-    linhaFixador[10] = `=ROUNDUP(R[-1]C/${fixConfig.interval})`;
+    linhaFixador[0] = pipe.originalRow[0]; // A
+    linhaFixador[1] = pipe.originalRow[1]; // B
+    linhaFixador[2] = pipe.originalRow[2]; // C
+    linhaFixador[3] = pipe.originalRow[3]; // D
+    linhaFixador[4] = pipe.originalRow[4]; // E
+    linhaFixador[5] = pipe.originalRow[5]; // F
+    linhaFixador[6] = 'FIX';               // G (Trade)
+    linhaFixador[7] = pipe.originalRow[7]; // H
+    linhaFixador[8] = pipe.originalRow[8]; // I
+    linhaFixador[9] = fixadorItem;         // J (Desc)
+    linhaFixador[10] = `=ROUNDUP(R[-1]C/${fixConfig.interval})`; // K (Qty)
     
     formulasPipe.forEach((formula, idx) => {
-      linhaFixador[11 + idx] = formula || pipe.originalRow[11 + idx];
+        const targetColIndex = (formulaStartCol - 1) + idx;
+        if (targetColIndex < maxCol) {
+            linhaFixador[targetColIndex] = formula || pipe.originalRow[targetColIndex];
+        }
     });
     
     linhasParaInserir.push(linhaFixador);
@@ -1016,7 +1048,10 @@ function processarFixadoresSelecionados(selectedPipes) {
       linhaMat[10] = `=R${fixadorRow}C*${mat.factor}`;
       
       formulasPipe.forEach((formula, idx) => {
-        linhaMat[11 + idx] = formula || pipe.originalRow[11 + idx];
+        const targetColIndex = (formulaStartCol - 1) + idx;
+        if (targetColIndex < maxCol) {
+            linhaMat[targetColIndex] = formula || pipe.originalRow[targetColIndex];
+        }
       });
       
       linhasParaInserir.push(linhaMat);
@@ -1030,22 +1065,24 @@ function processarFixadoresSelecionados(selectedPipes) {
     const rangeDestino = sourceSheet.getRange(insertRow, 1, linhasParaInserir.length, maxCol);
     rangeDestino.setValues(linhasParaInserir);
     
+    // Reaplica as fórmulas R1C1
     linhasParaInserir.forEach((row, idx) => {
       const currentRow = insertRow + idx;
       
+      // Fórmula da Coluna K (Qty)
       const formulaK = row[10];
       if (typeof formulaK === 'string' && formulaK.startsWith('=')) {
         sourceSheet.getRange(currentRow, 11).setFormulaR1C1(formulaK);
       }
       
-      for (let col = 11; col <= 15; col++) {
+      // Fórmulas das colunas L em diante
+      for (let col = formulaStartCol - 1; col < formulaStartCol - 1 + numFormulaCols; col++) {
         const formula = row[col];
-        if (typeof formula === 'string' && formula.startsWith('=')) {
+         if (typeof formula === 'string' && formula.startsWith('=')) {
           sourceSheet.getRange(currentRow, col + 1).setFormulaR1C1(formula);
         }
       }
     });
-    
     totalAdded += linhasParaInserir.length;
   });
   
@@ -1159,7 +1196,6 @@ function onOpen() {
     .addItem('🧪 Diagnóstico', 'testSystem')
     .addItem('🔧 Recriar Config', 'forceCreateConfig')
     .addToUi();
-  
   ensureConfigExists();
 }
 
@@ -1176,40 +1212,44 @@ function onEdit(e) {
     const col = range.getColumn();
     const row = range.getRow();
     
-    if (col === 2 && row === 21) {
+    // Formata a versão
+    if (col === 2 && row === 21) { // Linha da Versão
       const formatted = Utils.formatVersion(range.getValue());
       if (formatted !== String(range.getValue())) {
         range.setValue(formatted);
       }
     }
     
+    // Atualiza painéis de agrupamento
     if (col === 2 && row >= 4 && row <= 7) {
       Utilities.sleep(200);
       const config = ConfigService.getAll();
       const sourceSheet = SpreadsheetApp.getActiveSpreadsheet()
         .getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
       
-      if (row === 4) {
+      if (row === 4) { // Mudou Aba Origem
         updateConfigDropdowns();
         updateGroupingPanel();
-      } else {
+      } else { // Mudou Nível 1, 2 ou 3
         updateSingleLevelPanel(row - 4, config, sourceSheet);
       }
       
       updatePreviewPanel(11);
     }
     
+    // Atualiza pré-visualização se um checkbox do painel for marcado
     if ((col === 6 || col === 8 || col === 10) && row >= 4) {
       updatePreviewPanel(11);
     }
   } else {
+    // Se editar a aba de origem, limpa o cache
     try {
       const config = ConfigService.getAll();
       if (sheetName === config[CONFIG.KEYS.SOURCE_SHEET]) {
         CacheManager.invalidateAll();
       }
     } catch (error) {
-      // Config ainda não existe
+      // Ignora erro
     }
   }
 }
@@ -1221,10 +1261,10 @@ function openConfigSidebar() {
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
+// Funções de Feedback (Wrapper)
 function runProcessingWithFeedback() {
   SpreadsheetApp.getActiveSpreadsheet().toast('Processando...', 'Aguarde', -1);
   const result = runProcessing();
-  
   if (result.success) {
     SpreadsheetApp.getActiveSpreadsheet().toast(
       `✅ ${result.created} relatórios criados!`,
@@ -1234,14 +1274,12 @@ function runProcessingWithFeedback() {
   } else {
     SpreadsheetApp.getUi().alert('Erro', result.message, SpreadsheetApp.getUi().ButtonSet.OK);
   }
-  
   return result;
 }
 
 function exportPDFsWithFeedback() {
   SpreadsheetApp.getActiveSpreadsheet().toast('Exportando PDFs...', 'Aguarde', -1);
   const result = exportSelectedPDFs(getReportSheetNames());
-  
   if (result.success) {
     SpreadsheetApp.getActiveSpreadsheet().toast(
       `✅ ${result.exported} PDFs exportados!`,
@@ -1257,7 +1295,7 @@ function forceRefreshCache() {
   CacheManager.invalidateAll();
   updateGroupingPanel();
   updatePreviewPanel(11);
-  SpreadsheetApp.getActiveSpreadsheet().toast('Cache limpo!', 'Sucesso', 3);
+  SpreadsheetApp.getActiveSpreadsheet().toast('Cache limpo e painéis atualizados!', 'Sucesso', 3);
 }
 
 function testSystem() {
@@ -1267,13 +1305,21 @@ function testSystem() {
       .getSheetByName(config[CONFIG.KEYS.SOURCE_SHEET]);
     
     const msg = [
+      `Versão do Script: 2.3 (Sidebar Fixadores)`,
       `Aba de Origem: ${config[CONFIG.KEYS.SOURCE_SHEET] || 'Não configurada'}`,
-      `Linhas: ${sourceSheet ? sourceSheet.getLastRow() - 1 : 0}`,
-      `Relatórios: ${getReportSheetNames().length}`
+      `Linhas na Origem: ${sourceSheet ? sourceSheet.getLastRow() - 1 : 0}`,
+      `Relatórios Gerados: ${getReportSheetNames().length}`,
+      `Coluna de Classificação: ${config[CONFIG.KEYS.SORT_BY] || 'Não configurada'}`
     ].join('\n');
     
-    SpreadsheetApp.getUi().alert('🧪 Diagnóstico', msg, SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert('🧪 Diagnóstico do Sistema', msg, SpreadsheetApp.getUi().ButtonSet.OK);
+    
+    return { 
+      "Modo de Filtro": "Classificação Avançada", 
+      "Tipologias Selecionadas": sourceSheet ? sourceSheet.getLastRow() - 1 : 0 
+    };
+
   } catch (error) {
-    SpreadsheetApp.getUi().alert('Erro', error.message, SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert('Erro no Diagnóstico', error.message, SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }
