@@ -352,13 +352,9 @@
               <label for="folderInput">Pasta Drive (ID ou Nome)</label>
               <input type="text" id="folderInput" oninput="saveState()">
             </div>
-            <div class="form-group">
-              <label for="prefixInput">Prefixo do PDF</label>
-              <input type="text" id="prefixInput" oninput="saveState()">
-            </div>
           </div>
           <div class="config-section">
-            <h3>Relatórios para Exportar</h3>
+            <h3>Relatórios Gerados</h3>
             <div id="pdf-list-container">
               (Carregando automaticamente...)
             </div>
@@ -456,8 +452,7 @@
       'col1Select': CONFIG_KEYS.COL_1, 'col2Select': CONFIG_KEYS.COL_2, 'col3Select': CONFIG_KEYS.COL_3, 'col4Select': CONFIG_KEYS.COL_4, 'col5Select': CONFIG_KEYS.COL_5,
       'projectInput': CONFIG_KEYS.PROJECT, 'bomInput': CONFIG_KEYS.BOM, 'kojoInput': CONFIG_KEYS.KOJO_PREFIX, 'engineerInput': CONFIG_KEYS.ENGINEER, 'versionInput': CONFIG_KEYS.VERSION,
       'sortBySelect': CONFIG_KEYS.SORT_BY, 'sortOrderSelect': CONFIG_KEYS.SORT_ORDER,
-      'folderInput': CONFIG_KEYS.DRIVE_FOLDER_ID,
-      'prefixInput': CONFIG_KEYS.PDF_PREFIX
+      'folderInput': CONFIG_KEYS.DRIVE_FOLDER_ID
     };
 
     // 1. INICIALIZAÇÃO
@@ -856,15 +851,14 @@
       document.querySelectorAll('.pdf-check:checked').forEach(cb => {
         sheetNames.push(cb.value);
       });
-      
+
       if (sheetNames.length === 0) {
         showStatus('Nenhum relatório selecionado para exportar.', 'error');
         return;
       }
-      
+
       const folderInput = document.getElementById('folderInput').value;
-      const prefix = document.getElementById('prefixInput').value;
-      
+
       showStatus(`Exportando ${sheetNames.length} PDF(s)...`, 'info');
       document.getElementById('exportPdfBtn').disabled = true;
 
@@ -878,7 +872,7 @@
           document.getElementById('exportPdfBtn').disabled = false;
         })
         .withFailureHandler(onError)
-        .runPdfExportFromHtml(sheetNames, folderInput, prefix);
+        .runPdfExportFromHtml(sheetNames, folderInput);
     }
     
     // 6. SALVAR/CARREGAR ESTADO

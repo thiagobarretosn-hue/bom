@@ -967,19 +967,18 @@ function removerFixadoresSelecionados(selectedPipes) {
 // EXPORTAÇÃO PDF (V2.12)
 // ============================================================================
 
-function runPdfExportFromHtml(sheetNames, folderInput, prefix) {
+function runPdfExportFromHtml(sheetNames, folderInput) {
   if (!sheetNames || sheetNames.length === 0) {
     return { success: false, message: 'Nenhuma aba selecionada' };
   }
-  const folder = getFolderFromInput(folderInput, folderInput); // Usa o input como ID e fallback de nome
+  const folder = getFolderFromInput(folderInput, folderInput);
   if (!folder) return { success: false, message: `Pasta não encontrada ou inválida: ${folderInput}` };
 
   sheetNames.forEach(sheetName => {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
     if (sheet) {
-      // Lê o nome da BOM KOJO da célula B3 (onde está "BOM KOJO:")
       const bomKojoName = getBomKojoNameFromSheet(sheet);
-      const fileName = bomKojoName || sheetName; // Fallback para o nome da sheet se não encontrar
+      const fileName = bomKojoName || sheetName;
       exportSheetToPdf(sheet, fileName, folder);
     }
   });
