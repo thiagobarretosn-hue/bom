@@ -194,6 +194,7 @@
               container.appendChild(div);
             });
           }
+          updateCounter(); // Atualiza o contador mesmo se a lista estiver vazia
           toggleAllButtons(false); // Re-habilita os botões após carregar a lista
         })
         .withFailureHandler(error => {
@@ -253,7 +254,7 @@
           showToast(`Erro: ${err.message}`, 'error');
           toggleAllButtons(false);
         })
-        .runProcessing();
+        .runProcessingWithFeedback(); // Mudado para a função com Feedback
     }
     
     function exportSelected() {
@@ -285,7 +286,8 @@
         toggleAllButtons(true);
         google.script.run
             .withSuccessHandler(report => {
-                const reportMsg = `Diagnóstico: ${report["Modo de Filtro"]} com ${report["Tipologias Selecionadas"]} tipologias selecionadas.`;
+                // A resposta do `testSystem` foi ajustada no 'code.gs'
+                const reportMsg = `Diagnóstico: ${report["Modo de Filtro"]} com ${report["Tipologias Selecionadas"]} linhas na origem.`;
                 showToast(reportMsg, 'success');
                 toggleAllButtons(false);
             })
@@ -298,4 +300,3 @@
   </script>
 </body>
 </html>
-
