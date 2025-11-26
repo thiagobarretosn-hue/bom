@@ -129,8 +129,28 @@
       background: var(--section-bg); color: white;
       padding: 8px 12px; border-radius: 4px 4px 0 0;
       font-weight: 600; font-size: 12px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      display: flex; justify-content: space-between; align-items: center;
       flex-shrink: 0;
+    }
+    .panel-header-title {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      flex: 1;
+    }
+    .select-all-btn {
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      color: white;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      margin-left: 8px;
+      transition: all 0.2s;
+    }
+    .select-all-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      border-color: rgba(255, 255, 255, 0.6);
     }
     /* ✅ CORREÇÃO (Bug 3): Painel de filtro com scroll interno */
     .panel-body {
@@ -583,16 +603,27 @@
     
     function buildPanel(panelId, colName, values) {
       const container = document.getElementById(panelId);
-      container.innerHTML = ''; 
-      
+      container.innerHTML = '';
+
       const header = document.createElement('div');
       header.className = 'panel-header';
       header.title = colName;
-      header.textContent = `${panelId.replace('panel-', 'NÍVEL ')}: ${colName.split(' - ')[1] || ''}`;
-      
+
+      const headerTitle = document.createElement('span');
+      headerTitle.className = 'panel-header-title';
+      headerTitle.textContent = `${panelId.replace('panel-', 'NÍVEL ')}: ${colName.split(' - ')[1] || ''}`;
+
+      const selectAllBtn = document.createElement('button');
+      selectAllBtn.className = 'select-all-btn';
+      selectAllBtn.textContent = 'Todos';
+      selectAllBtn.onclick = () => togglePanelSelection(panelId);
+
+      header.appendChild(headerTitle);
+      header.appendChild(selectAllBtn);
+
       const body = document.createElement('div');
       body.className = 'panel-body';
-      
+
       if (values.length > 0) {
         values.forEach(val => {
           const item = document.createElement('div');
@@ -606,11 +637,26 @@
       } else {
         body.innerHTML = '<div class="panel-item">Nenhum valor encontrado.</div>';
       }
-      
+
       container.appendChild(header);
       container.appendChild(body);
     }
     
+    function togglePanelSelection(panelId) {
+      const panel = document.getElementById(panelId);
+      const checkboxes = panel.querySelectorAll('input[type="checkbox"]');
+
+      // Verifica se todos estão marcados
+      const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+
+      // Se todos estão marcados, desmarca todos; senão, marca todos
+      checkboxes.forEach(cb => {
+        cb.checked = !allChecked;
+      });
+
+      onFilterChange();
+    }
+
     function onFilterChange() {
       saveState();
       updatePreview();
