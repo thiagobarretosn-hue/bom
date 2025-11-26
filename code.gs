@@ -973,12 +973,15 @@ function runPdfExportFromHtml(sheetNames, folderInput, prefix) {
   }
   const folder = getFolderFromInput(folderInput, folderInput); // Usa o input como ID e fallback de nome
   if (!folder) return { success: false, message: `Pasta não encontrada ou inválida: ${folderInput}` };
-  
-  const pdfPrefix = prefix || 'Relatorio';
-  
+
   sheetNames.forEach(sheetName => {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-    if (sheet) exportSheetToPdf(sheet, `${pdfPrefix}_${sheetName}`, folder);
+    if (sheet) {
+      // Lê o nome da BOM KOJO da célula B3 (onde está "BOM KOJO:")
+      const bomKojoName = getBomKojoNameFromSheet(sheet);
+      const fileName = bomKojoName || sheetName; // Fallback para o nome da sheet se não encontrar
+      exportSheetToPdf(sheet, fileName, folder);
+    }
   });
   return { success: true, exported: sheetNames.length, folder: folder.getName() };
 }
@@ -987,30 +990,51 @@ function exportPDFsWithFeedback() {
   SpreadsheetApp.getActiveSpreadsheet().toast('Exportando PDFs...', 'Aguarde', -1);
   const config = ConfigService.getAll();
   const K = CONFIG.KEYS;
-  
+
   const sheetNames = getReportSheetNames();
   if (!sheetNames || sheetNames.length === 0) {
      SpreadsheetApp.getUi().alert('Erro', 'Nenhum relatório gerado para exportar.', SpreadsheetApp.getUi().ButtonSet.OK);
      return;
   }
-  
+
   const folder = getFolderFromInput(config[K.DRIVE_FOLDER_ID], config[K.DRIVE_FOLDER_NAME]);
   if (!folder) {
     SpreadsheetApp.getUi().alert('Erro', 'Pasta de destino não configurada ou inválida na aba "Config".', SpreadsheetApp.getUi().ButtonSet.OK);
     return;
   }
 
-  const prefix = config[K.PDF_PREFIX] || 'Relatorio';
-  
   sheetNames.forEach(sheetName => {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-    if (sheet) exportSheetToPdf(sheet, `${prefix}_${sheetName}`, folder);
+    if (sheet) {
+      // Lê o nome da BOM KOJO da célula B3 (onde está "BOM KOJO:")
+      const bomKojoName = getBomKojoNameFromSheet(sheet);
+      const fileName = bomKojoName || sheetName; // Fallback para o nome da sheet se não encontrar
+      exportSheetToPdf(sheet, fileName, folder);
+    }
   });
-  
+
   SpreadsheetApp.getActiveSpreadsheet().toast(
       `✅ ${sheetNames.length} PDFs exportados para "${folder.getName()}"!`,
       'Sucesso', 5
     );
+}
+
+/**
+ * Extrai o nome da BOM KOJO da célula B3 de uma sheet de relatório.
+ * Retorna null se não encontrar o valor.
+ */
+function getBomKojoNameFromSheet(sheet) {
+  try {
+    if (!sheet) return null;
+    // O valor da BOM KOJO está na célula B3 (linha 3, coluna 2)
+    const bomKojoValue = sheet.getRange(3, 2).getValue();
+    if (bomKojoValue && String(bomKojoValue).trim() !== '') {
+      return String(bomKojoValue).trim();
+    }
+  } catch (error) {
+    Logger.log(`Erro ao ler BOM KOJO da sheet "${sheet.getName()}": ${error.message}`);
+  }
+  return null;
 }
 
 function getFolderFromInput(folderInput, folderName) {
@@ -1020,7 +1044,7 @@ function getFolderFromInput(folderInput, folderName) {
         const folderById = DriveApp.getFolderById(folderInput);
         if (folderById) return folderById;
       } catch (e) { /* Não é um ID */ }
-      
+
       const match = folderInput.match(/folders\/([a-zA-Z0-9_-]+)/);
       if (match && match[1]) {
          try {
@@ -1029,18 +1053,18 @@ function getFolderFromInput(folderInput, folderName) {
          } catch(e) { /* Link inválido */ }
       }
     }
-    
+
     const nameToSearch = folderInput || folderName;
     if (nameToSearch) {
       const folders = DriveApp.getFoldersByName(nameToSearch);
       if (folders.hasNext()) return folders.next();
-      return DriveApp.createFolder(nameToSearch); 
+      return DriveApp.createFolder(nameToSearch);
     }
-    
+
     const defaultName = `${SpreadsheetApp.getActiveSpreadsheet().getName()} - PDFs`;
     const folders = DriveApp.getFoldersByName(defaultName);
     return folders.hasNext() ? folders.next() : DriveApp.createFolder(defaultName);
-    
+
   } catch (error) {
     Logger.log(`Erro ao acessar pasta: ${error.message}`);
     return null;
