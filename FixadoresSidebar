@@ -442,6 +442,7 @@
                 <span class="meta-tag">🏗️ ${pipe.trade}</span>
                 <span class="meta-tag">📐 ${pipe.floor}</span>
                 <span class="meta-tag">🏢 ${pipe.unitType}</span>
+                 <span class="meta-tag">🎇 ${pipe.phase}</span>
                 ${pipe.diameter ?
                 `<span class="meta-tag">🧿 ⌀ ${pipe.diameter}"</span>` : ''}
                 <span class="meta-tag">📏 ${pipe.qty} ${pipe.uom}</span>
