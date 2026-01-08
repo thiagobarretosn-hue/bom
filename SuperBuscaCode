@@ -7,12 +7,6 @@ const SUPER_BUSCA_CONFIG = {
   MENU_TITLE: '🔍 Super Busca'
 };
 
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu(SUPER_BUSCA_CONFIG.MENU_TITLE)
-    .addItem('🚀 Abrir Painel', 'abrirSuperBuscaSidebar')
-    .addToUi();
-}
 
 function abrirSuperBuscaSidebar() {
   const html = HtmlService.createHtmlOutputFromFile('SuperBuscaSidebar')
