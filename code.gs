@@ -1239,7 +1239,8 @@ function onOpen() {
     .addItem('🧪 Diagnóstico', 'testSystem')
     .addItem('🔧 Recriar Config', 'forceCreateConfig')
     .addToUi();
-ui.createMenu('🔍 Super Busca')
+  SpreadsheetApp.getUi()
+    .createMenu('🔍 Super Busca')
     .addItem('🚀 Abrir Painel', 'abrirSuperBuscaSidebar')
     .addToUi();
   // ==================================
